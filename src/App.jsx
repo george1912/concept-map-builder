@@ -1207,21 +1207,21 @@ function buildPriorityNursingFields(inputFields = {}, rawText = '') {
   const safetyRisk = /fall|weakness|eliquis|anticoagulant/i.test(text) || profile.olderAdult || profile.syncope;
 
   return {
-    nd1Assessment: profile.anemia ? 'Low Hgb/iron; fatigue or syncope risk.' : compactText(fields.labInterpretation || fields.diagnosis, 115),
-    nd1Diagnosis: focusedDiagnoses[0] || 'Impaired health maintenance',
-    nd1Rationale: profile.anemia ? 'Low Hgb can reduce oxygen delivery and activity tolerance.' : (profile.infection ? 'Elevated WBC/UA findings support infection monitoring.' : 'Assessment findings guide priority care.'),
+    nd1Assessment: withPriorityPrompt('nd1Assessment', profile.anemia ? 'Low Hgb/iron; fatigue or syncope risk.' : compactText(fields.labInterpretation || fields.diagnosis, 95)),
+    nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', focusedDiagnoses[0] || 'Impaired health maintenance'),
+    nd1Rationale: withPriorityPrompt('nd1Rationale', profile.anemia ? 'Low Hgb can reduce oxygen delivery and activity tolerance.' : (profile.infection ? 'Elevated WBC/UA findings support infection monitoring.' : 'Assessment findings guide priority care.')),
     nd1Intervention: profile.anemia ? 'Monitor H/H, dizziness, bleeding signs, vitals, and response to treatment.' : (profile.infection ? 'Monitor temperature, WBC/UA trends, urine changes, and antibiotics.' : 'Monitor status and report clinical changes.'),
     nd1Evaluation: 'Response pending; continue reassessment.',
 
-    nd2Assessment: safetyRisk ? 'Age, syncope, or weakness increases safety risk.' : 'Active condition requires focused monitoring.',
-    nd2Diagnosis: focusedDiagnoses[1] || 'Risk for falls',
-    nd2Rationale: safetyRisk ? 'Weakness or syncope increases injury risk if a fall occurs.' : 'Clinical changes can affect safety and recovery.',
+    nd2Assessment: withPriorityPrompt('nd2Assessment', safetyRisk ? 'Age, syncope, or weakness increases safety risk.' : 'Active condition requires focused monitoring.'),
+    nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', focusedDiagnoses[1] || 'Risk for falls'),
+    nd2Rationale: withPriorityPrompt('nd2Rationale', safetyRisk ? 'Weakness or syncope increases injury risk if a fall occurs.' : 'Clinical changes can affect safety and recovery.'),
     nd2Intervention: safetyRisk ? 'Maintain fall precautions, assist ambulation, and monitor dizziness.' : 'Reassess symptoms, vitals, and safety needs.',
     nd2Evaluation: 'No injury noted; continue safety monitoring.',
 
-    nd3Assessment: profile.respiratory ? 'SOB/fatigue reported.' : (profile.weakness ? 'Weakness limits activity tolerance.' : (fields.pain ? `Pain ${fields.pain}; monitor response.` : 'Patient needs continued reassessment.')),
-    nd3Diagnosis: focusedDiagnoses[2] || 'Activity intolerance',
-    nd3Rationale: profile.respiratory || profile.weakness ? 'Weakness/SOB can reduce activity tolerance.' : 'Symptoms require follow-up to guide care.',
+    nd3Assessment: withPriorityPrompt('nd3Assessment', profile.respiratory ? 'SOB/fatigue reported.' : (profile.weakness ? 'Weakness limits activity tolerance.' : (fields.pain ? `Pain ${fields.pain}; monitor response.` : 'Patient needs continued reassessment.'))),
+    nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', focusedDiagnoses[2] || 'Activity intolerance'),
+    nd3Rationale: withPriorityPrompt('nd3Rationale', profile.respiratory || profile.weakness ? 'Weakness/SOB can reduce activity tolerance.' : 'Symptoms require follow-up to guide care.'),
     nd3Intervention: profile.respiratory || profile.weakness ? 'Pace activity, assist ADLs, and monitor fatigue/respiratory status.' : 'Monitor response and update care plan.',
     nd3Evaluation: 'Tolerance requires ongoing reassessment.',
   };
@@ -1597,6 +1597,26 @@ const CONCEPT_MAP_FIELD_LIMITS = {
   nd3Intervention: 130,
   nd3Evaluation: 115,
 };
+
+const PRIORITY_FIELD_PROMPTS = {
+  nd1Assessment: 'As Evidenced By:',
+  nd2Assessment: 'As Evidenced By:',
+  nd3Assessment: 'As Evidenced By:',
+  nd1Diagnosis: 'Priority Problem:',
+  nd2Diagnosis: 'Priority Problem:',
+  nd3Diagnosis: 'Priority Problem:',
+  nd1Rationale: 'Related to change in:',
+  nd2Rationale: 'Related to change in:',
+  nd3Rationale: 'Related to change in:',
+};
+
+function withPriorityPrompt(key, value = '') {
+  const prompt = PRIORITY_FIELD_PROMPTS[key];
+  const text = clean(value);
+  if (!prompt || !text) return text;
+  if (text.toLowerCase().startsWith(prompt.toLowerCase())) return text;
+  return compactText(`${prompt} ${text}`, CONCEPT_MAP_FIELD_LIMITS[key] || 150);
+}
 
 function toShortNursingDiagnosis(value = '') {
   const text = clean(String(value || '')).replace(/\.$/, '');
@@ -3919,19 +3939,19 @@ export default function App() {
       currentMedDate: '5/28/2026',
       currentMedOrder: 'Valsartan; amlodipine; furosemide; Eliquis; cefdinir',
       currentMedIndication: 'Manage cardiac history; treat possible UTI',
-      nd1Assessment: 'Elevated WBC and urine findings suggest infection.',
-      nd1Diagnosis: 'Impaired urinary elimination',
-      nd1Rationale: 'Abnormal urine findings and elevated WBC support urinary infection concerns.',
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'Elevated WBC and urine findings suggest infection.'),
+      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Impaired urinary elimination'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'Abnormal urine findings and elevated WBC support urinary infection concerns.'),
       nd1Intervention: 'Monitor temp, urine, WBC trends, and antibiotics as ordered.',
       nd1Evaluation: 'Patient remains monitored; response pending.',
-      nd2Assessment: 'Age, weakness, and Eliquis increase fall/bleeding risk.',
-      nd2Diagnosis: 'Risk for falls',
-      nd2Rationale: 'Weakness and anticoagulation increase injury risk.',
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Age, weakness, and Eliquis increase fall/bleeding risk.'),
+      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Risk for falls'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Weakness and anticoagulation increase injury risk.'),
       nd2Intervention: 'Maintain fall precautions and assist ambulation.',
       nd2Evaluation: 'No injury noted during shift.',
-      nd3Assessment: 'Mild pain 3/10 with fatigue and SOB.',
-      nd3Diagnosis: 'Activity intolerance',
-      nd3Rationale: 'Fatigue/SOB can limit activity tolerance.',
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Mild pain 3/10 with fatigue and SOB.'),
+      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Activity intolerance'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Fatigue/SOB can limit activity tolerance.'),
       nd3Intervention: 'Cluster care, pace activity, monitor respiratory status.',
       nd3Evaluation: 'Tolerance requires reassessment.',
     };
@@ -4146,6 +4166,7 @@ export default function App() {
     const reviewReason = getReviewReasonForValue(fields[key]);
     const exportLimit = CONCEPT_MAP_FIELD_LIMITS[key];
     const fieldLength = clean(String(fields[key] || '')).length;
+    const priorityPrompt = PRIORITY_FIELD_PROMPTS[key] || '';
     const overExportLimit = Boolean(exportLimit && fieldLength > exportLimit);
     const highlightReview = Boolean(reviewReason && ['Verify', 'AI generated', 'Missing'].includes(reviewReason)) || overExportLimit;
     const selectOptionsByKey = {
@@ -4198,9 +4219,9 @@ export default function App() {
             ))}
           </select>
         ) : useInput ? (
-          <input type="text" value={fields[key] || ''} onChange={(e) => updateField(key, e.target.value)} />
+          <input type="text" value={fields[key] || ''} placeholder={priorityPrompt} onChange={(e) => updateField(key, e.target.value)} />
         ) : (
-          <textarea value={fields[key] || ''} onChange={(e) => updateField(key, e.target.value)} />
+          <textarea value={fields[key] || ''} placeholder={priorityPrompt} onChange={(e) => updateField(key, e.target.value)} />
         )}
         {exportLimit && (
           <div className={`field-hint ${overExportLimit ? 'danger' : ''}`}>
