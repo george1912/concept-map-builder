@@ -4307,6 +4307,30 @@ export default function App() {
                   ))}
                 </div>
                 <div className="live-status">{status}</div>
+                <details className="guide-panel">
+                  <summary>
+                    <span><FileText size={17} /> Using a Typhon case log</span>
+                    <ChevronDown size={18} />
+                  </summary>
+                  <div className="guide-body">
+                    <div className="guide-copy">
+                      <strong>Start with the case log PDF.</strong>
+                      <p>Upload the Typhon case log or paste its text, then run Auto Fill from Case PDF. Cleaner logs give cleaner maps, but every field can be reviewed and edited before export.</p>
+                    </div>
+                    <div className="guide-steps">
+                      <div><span>1</span><strong>Upload</strong><small>Use the original case log when possible.</small></div>
+                      <div><span>2</span><strong>Auto Fill</strong><small>Let the builder place the likely fields.</small></div>
+                      <div><span>3</span><strong>Review</strong><small>Fix flagged or blank values.</small></div>
+                      <div><span>4</span><strong>Export</strong><small>Download the formatted concept map PDF.</small></div>
+                    </div>
+                    <div className="guide-flags">
+                      <span className="guide-flag missing">Missing means no clear source value was found.</span>
+                      <span className="guide-flag verify">Verify means the field should be checked against the chart or case log.</span>
+                      <span className="guide-flag generated">AI generated means the app supplied a likely fill-in and needs your review.</span>
+                      <span className="guide-flag limit">PDF limit means shorten it so it fits the concept map box.</span>
+                    </div>
+                  </div>
+                </details>
               </div>
               <div>
                 <div className="split-2">
