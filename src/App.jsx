@@ -3146,7 +3146,7 @@ function mergeNewCaseFields(prev = {}, parsedFields = {}) {
     week: parsedFields.week || '',
     semesterMeta: prev.semesterMeta || parsedFields.semesterMeta || '',
     courseMeta: prev.courseMeta || parsedFields.courseMeta || '',
-    facultyMeta: 'Karen Colombo',
+    facultyMeta: prev.facultyMeta || parsedFields.facultyMeta || 'Karen Colombo',
     siteMeta: prev.siteMeta || parsedFields.siteMeta || '',
   };
 }
@@ -3307,6 +3307,7 @@ export default function App() {
   const [articleResult, setArticleResult] = useState(null);
   const [articleError, setArticleError] = useState('');
   const [articleHistory, setArticleHistory] = useState([]);
+  const [sessionFacultyName, setSessionFacultyName] = useState('');
   const fileInputRef = useRef(null);
   const hasAutoAdvancedStep1Ref = useRef(false);
 
@@ -3373,6 +3374,25 @@ export default function App() {
   const canAddMedicationRow = medications.length < MED_TEMPLATE_ROW_CAP;
   const updateField = (key, value) => setFields((prev) => ({ ...prev, [key]: value }));
   const hasApiKey = Boolean(openAiApiKey.trim());
+  const facultyOptions = useMemo(() => {
+    const options = [...FACULTY_OPTIONS];
+    [fields.facultyMeta, sessionFacultyName].forEach((name) => {
+      const normalized = normalizeFacultyName(name);
+      if (normalized && !options.includes(normalized)) options.push(normalized);
+    });
+    return options;
+  }, [fields.facultyMeta, sessionFacultyName]);
+
+  const applySessionFacultyName = () => {
+    const nextName = normalizeFacultyName(sessionFacultyName);
+    if (!nextName) {
+      setStatus('Enter an instructor name to use for this session.');
+      return;
+    }
+    setSessionFacultyName(nextName);
+    updateField('facultyMeta', nextName);
+    setStatus(`${nextName} is selected for this session only.`);
+  };
 
   useEffect(() => {
     setHasSavedApiKey(Boolean(localStorage.getItem(API_KEY_STORAGE_KEY)));
@@ -4298,8 +4318,24 @@ export default function App() {
                     <label>Clinical Faculty</label>
                     <select value={fields.facultyMeta || ''} onChange={(e) => updateField('facultyMeta', e.target.value)}>
                       <option value="">Select faculty</option>
-                      {FACULTY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                      {facultyOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
+                    <div className="inline-save-row" style={{ marginTop: 8 }}>
+                      <input
+                        type="text"
+                        value={sessionFacultyName}
+                        placeholder="Temporary instructor name"
+                        onChange={(e) => setSessionFacultyName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            applySessionFacultyName();
+                          }
+                        }}
+                      />
+                      <button type="button" className="btn" onClick={applySessionFacultyName}>Use</button>
+                    </div>
+                    <div className="field-hint">Custom instructor names are kept for this browser session only.</div>
                   </div>
                 </div>
                 {!metadataReady && (
