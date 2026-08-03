@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, CircleDashed, Columns2, Rows3 } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, CircleDashed, Columns2, Rows3, Plus } from 'lucide-react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { jsPDF } from 'jspdf';
@@ -4259,6 +4259,74 @@ export default function App() {
     );
   };
 
+  const typhonGuide = (
+    <details className="guide-panel guide-hero" open>
+      <summary>
+        <span><FileText size={17} /> Start Here: Typhon Case Log Guide</span>
+        <ChevronDown size={18} />
+      </summary>
+      <div className="guide-body">
+        <div className="guide-copy">
+          <strong>Use the exported Typhon case log as your source.</strong>
+          <p>The builder fills the concept-map draft from that log, then you review the marked fields and export the finished PDF. Think of this as a guided first pass, not a locked form.</p>
+        </div>
+        <div className="guide-screens" aria-label="Onboarding walkthrough">
+          <div className="guide-screen">
+            <div className="mini-window">
+              <div className="mini-bar"><span></span><span></span><span></span></div>
+              <div className="mini-upload">
+                <Upload size={18} />
+                <strong>Upload Case PDF</strong>
+                <small>Typhon case log</small>
+              </div>
+            </div>
+            <strong>1. Add the log</strong>
+            <p>Upload the case PDF, or paste the case text if the PDF is hard to read.</p>
+          </div>
+          <div className="guide-screen">
+            <div className="mini-window">
+              <div className="mini-bar"><span></span><span></span><span></span></div>
+              <div className="mini-actions">
+                <span className="mini-button dark">Upload</span>
+                <span className="mini-button blue">Auto Fill</span>
+              </div>
+              <div className="mini-progress"><i></i><i></i><i></i></div>
+            </div>
+            <strong>2. Run Auto Fill</strong>
+            <p>The app places the best available values into the concept-map fields.</p>
+          </div>
+          <div className="guide-screen">
+            <div className="mini-window">
+              <div className="mini-bar"><span></span><span></span><span></span></div>
+              <div className="mini-field"><b>Allergies</b><em className="mini-flag gold">Verify</em></div>
+              <div className="mini-field"><b>Edema</b><em className="mini-flag rose">Missing</em></div>
+              <div className="mini-field"><b>Medication</b><em className="mini-flag plum">AI generated</em></div>
+            </div>
+            <strong>3. Review flags</strong>
+            <p>Marked values need your eyes before the final export.</p>
+          </div>
+          <div className="guide-screen">
+            <div className="mini-window">
+              <div className="mini-bar"><span></span><span></span><span></span></div>
+              <div className="mini-map">
+                <span></span><span></span><span></span><span></span>
+                <strong>PDF</strong>
+              </div>
+            </div>
+            <strong>4. Export the map</strong>
+            <p>Download the formatted concept map PDF after the fields look right.</p>
+          </div>
+        </div>
+        <div className="guide-flags">
+          <span className="guide-flag missing">Missing: no clear source value was found.</span>
+          <span className="guide-flag verify">Verify: check this against the chart or case log.</span>
+          <span className="guide-flag generated">AI generated: review before submitting.</span>
+          <span className="guide-flag limit">PDF limit: shorten text so it fits the box.</span>
+        </div>
+      </div>
+    </details>
+  );
+
   return (
     <div className={`app-shell view-${viewMode}`}>
       <div className="container">
@@ -4288,6 +4356,8 @@ export default function App() {
           <input ref={fileInputRef} type="file" accept="application/pdf" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
         </div>
 
+        {typhonGuide}
+
         <div className="workflow">
           <section className="card setup-card">
             <div className="card-header"><h2 className="card-title">Progress</h2></div>
@@ -4307,71 +4377,6 @@ export default function App() {
                   ))}
                 </div>
                 <div className="live-status">{status}</div>
-                <details className="guide-panel">
-                  <summary>
-                    <span><FileText size={17} /> Using a Typhon case log</span>
-                    <ChevronDown size={18} />
-                  </summary>
-                  <div className="guide-body">
-                    <div className="guide-copy">
-                      <strong>Typhon case log walkthrough</strong>
-                      <p>Use the exported Typhon case log as the source. The builder fills the concept-map draft, then you review the marked fields and export the finished PDF.</p>
-                    </div>
-                    <div className="guide-screens" aria-label="Onboarding walkthrough">
-                      <div className="guide-screen">
-                        <div className="mini-window">
-                          <div className="mini-bar"><span></span><span></span><span></span></div>
-                          <div className="mini-upload">
-                            <Upload size={18} />
-                            <strong>Upload Case PDF</strong>
-                            <small>Typhon case log</small>
-                          </div>
-                        </div>
-                        <strong>1. Add the log</strong>
-                        <p>Upload the case PDF, or paste the case text if the PDF is hard to read.</p>
-                      </div>
-                      <div className="guide-screen">
-                        <div className="mini-window">
-                          <div className="mini-bar"><span></span><span></span><span></span></div>
-                          <div className="mini-actions">
-                            <span className="mini-button dark">Upload</span>
-                            <span className="mini-button blue">Auto Fill</span>
-                          </div>
-                          <div className="mini-progress"><i></i><i></i><i></i></div>
-                        </div>
-                        <strong>2. Run Auto Fill</strong>
-                        <p>The app places the best available values into the concept-map fields.</p>
-                      </div>
-                      <div className="guide-screen">
-                        <div className="mini-window">
-                          <div className="mini-bar"><span></span><span></span><span></span></div>
-                          <div className="mini-field"><b>Allergies</b><em className="mini-flag gold">Verify</em></div>
-                          <div className="mini-field"><b>Edema</b><em className="mini-flag rose">Missing</em></div>
-                          <div className="mini-field"><b>Medication</b><em className="mini-flag plum">AI generated</em></div>
-                        </div>
-                        <strong>3. Review flags</strong>
-                        <p>Marked values need your eyes before the final export.</p>
-                      </div>
-                      <div className="guide-screen">
-                        <div className="mini-window">
-                          <div className="mini-bar"><span></span><span></span><span></span></div>
-                          <div className="mini-map">
-                            <span></span><span></span><span></span><span></span>
-                            <strong>PDF</strong>
-                          </div>
-                        </div>
-                        <strong>4. Export the map</strong>
-                        <p>Download the formatted concept map PDF after the fields look right.</p>
-                      </div>
-                    </div>
-                    <div className="guide-flags">
-                      <span className="guide-flag missing">Missing: no clear source value was found.</span>
-                      <span className="guide-flag verify">Verify: check this against the chart or case log.</span>
-                      <span className="guide-flag generated">AI generated: review before submitting.</span>
-                      <span className="guide-flag limit">PDF limit: shorten text so it fits the box.</span>
-                    </div>
-                  </div>
-                </details>
               </div>
               <div>
                 <div className="split-2">
@@ -4452,20 +4457,20 @@ export default function App() {
               <div className="card-header"><h2 className="card-title">Concept Map Fields</h2></div>
               <div className="card-content">
                 {MAIN_CONCEPT_MAP_FIELD_GROUPS.map((group) => (
-                  <details className="field-group" key={group.title} open>
+                  <details className="field-group" key={group.title}>
                     <summary>
                       <h3>{group.title}</h3>
-                      <ChevronDown size={18} />
+                      <Plus size={18} />
                     </summary>
                     <div className="field-group-grid">
                       {group.fields.map(renderConceptMapField)}
                     </div>
                   </details>
                 ))}
-                <details className="field-group" open>
+                <details className="field-group">
                   <summary>
                     <span>Medications</span>
-                    <ChevronDown size={18} />
+                    <Plus size={18} />
                   </summary>
                   <div className="field">
                     <label className="field-label-row">
@@ -4503,10 +4508,10 @@ export default function App() {
                   </div>
                 </div>
                 {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
-                  <details className="field-group" key={group.title} open>
+                  <details className="field-group" key={group.title}>
                     <summary>
                       <h3>{group.title}</h3>
-                      <ChevronDown size={18} />
+                      <Plus size={18} />
                     </summary>
                     <div className="field-group-grid">
                       {group.fields.map(renderConceptMapField)}
