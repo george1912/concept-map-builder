@@ -4496,17 +4496,8 @@ export default function App() {
             </section>
 
             <section className="card priority-card">
-              <div className="card-header"><h2 className="card-title">Nursing Diagnosis Beta</h2></div>
+              <div className="card-header"><h2 className="card-title">Nursing Diagnosis</h2></div>
               <div className="card-content">
-                <div className="warning">
-                  <strong><AlertTriangle size={16} style={{verticalAlign:'text-bottom', marginRight:6}} />Optional AI-generated support</strong>
-                  <div>This section can help draft nursing priorities for testing. Review and edit every field, or leave it blank for the normal class concept map.</div>
-                  <div className="btn-row" style={{ marginTop: 10 }}>
-                    <button className="btn" onClick={developPriorityNursingBeta} disabled={sequenceStep < 3 || loading || aiLoading}>
-                      <Wand2 size={16} />Develop Nursing Priorities
-                    </button>
-                  </div>
-                </div>
                 {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
                   <details className="field-group" key={group.title}>
                     <summary>
@@ -4518,6 +4509,19 @@ export default function App() {
                     </div>
                   </details>
                 ))}
+                <details className="ai-support-panel">
+                  <summary>
+                    <span><Wand2 size={16} />Optional AI-generated support</span>
+                    <Plus size={18} />
+                  </summary>
+                  <div className="ai-support-body">
+                    <strong>This is a testing aid only.</strong>
+                    <p>It can draft nursing-priority text from the case log, but it is not meant to replace your own clinical judgment, instructor requirements, or manual review.</p>
+                    <button className="btn" onClick={developPriorityNursingBeta} disabled={sequenceStep < 3 || loading || aiLoading}>
+                      <Wand2 size={16} />Fill nursing priorities for review
+                    </button>
+                  </div>
+                </details>
               </div>
             </section>
 
