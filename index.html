@@ -193,19 +193,58 @@
       .guide-body { display: grid; gap: 14px; padding: 14px; background: rgba(255, 255, 251, 0.72); }
       .guide-copy strong { display: block; font-size: 15px; margin-bottom: 4px; color: var(--text); }
       .guide-copy p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
-      .guide-steps {
+      .guide-screens {
         display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
       }
-      .guide-steps div {
-        min-height: 92px; border: 1px solid var(--border); border-radius: 7px; padding: 10px;
+      .guide-screen {
+        border: 1px solid var(--border); border-radius: 7px; padding: 10px;
         background: var(--ink-white);
       }
-      .guide-steps span {
-        display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-        border-radius: 50%; background: var(--accent); color: #fff; font-weight: 900; font-size: 12px; margin-bottom: 8px;
+      .guide-screen > strong { display: block; margin: 10px 0 4px; font-size: 14px; }
+      .guide-screen > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+      .mini-window {
+        min-height: 132px; border: 1px solid rgba(42, 38, 31, 0.34); border-radius: 7px; overflow: hidden;
+        background: #f9f7ec; box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
       }
-      .guide-steps strong { display: block; margin-bottom: 4px; font-size: 14px; }
-      .guide-steps small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+      .mini-bar {
+        display: flex; gap: 5px; align-items: center; height: 22px; padding: 0 8px;
+        background: linear-gradient(90deg, var(--pastel-blue), var(--pastel-mint));
+        border-bottom: 1px solid rgba(42, 38, 31, 0.22);
+      }
+      .mini-bar span { width: 7px; height: 7px; border-radius: 50%; background: rgba(39, 37, 29, 0.5); }
+      .mini-upload {
+        min-height: 110px; display: grid; place-items: center; align-content: center; gap: 7px;
+        color: var(--pastel-blue-text); text-align: center; padding: 12px;
+      }
+      .mini-upload small { color: var(--muted); }
+      .mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 16px 12px 10px; }
+      .mini-button {
+        border-radius: 5px; padding: 9px 6px; font-size: 11px; font-weight: 900; text-align: center;
+        border: 1px solid var(--border);
+      }
+      .mini-button.dark { background: var(--accent); color: #fff; }
+      .mini-button.blue { background: var(--pastel-blue); color: var(--pastel-blue-text); border-color: var(--pastel-blue-border); }
+      .mini-progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 0 12px 12px; }
+      .mini-progress i { display: block; height: 30px; border-radius: 5px; background: rgba(220, 232, 216, 0.85); border: 1px solid rgba(140, 154, 114, 0.5); }
+      .mini-field {
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center;
+        margin: 9px 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: #fffffb;
+      }
+      .mini-field b { font-size: 11px; }
+      .mini-flag { border-radius: 999px; padding: 4px 6px; font-size: 9px; font-style: normal; font-weight: 900; white-space: nowrap; }
+      .mini-flag.gold { background: var(--pastel-gold); color: var(--pastel-gold-text); }
+      .mini-flag.rose { background: var(--pastel-rose); color: var(--pastel-rose-text); }
+      .mini-flag.plum { background: var(--pastel-plum); color: var(--pastel-plum-text); }
+      .mini-map {
+        position: relative; height: 110px; margin: 0; padding: 14px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+      }
+      .mini-map span {
+        display: block; border: 1px solid rgba(42, 38, 31, 0.42); border-radius: 3px; background: rgba(255,255,251,0.75);
+      }
+      .mini-map strong {
+        position: absolute; inset: 38px 58px auto; border: 2px solid var(--accent); border-radius: 50%;
+        height: 48px; display: grid; place-items: center; background: #fffffb; font-size: 12px;
+      }
       .guide-flags { display: flex; flex-wrap: wrap; gap: 8px; }
       .guide-flag {
         border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px;
@@ -216,7 +255,7 @@
       .guide-flag.generated { background: var(--pastel-plum); color: var(--pastel-plum-text); border-color: #a998b7; }
       .guide-flag.limit { background: var(--pastel-mint); color: var(--pastel-green-text); border-color: #99ad8b; }
       .intake-actions {
-        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
       }
       .intake-actions .btn { justify-content: center; min-height: 54px; }
       .source-panel {
@@ -372,7 +411,7 @@
         padding: 16px; max-height: 38vh; overflow: auto; font-size: 12px; line-height: 1.45;
       }
       @media (max-width: 900px) {
-        .signal-list, .intake-actions, .guide-steps, .med-grid, .export-choice { grid-template-columns: 1fr; }
+        .signal-list, .intake-actions, .guide-screens, .med-grid, .export-choice { grid-template-columns: 1fr; }
       }
       @media (max-width: 700px) { .split-2, .field-group-grid, .inline-save-row { grid-template-columns: 1fr; } .app-shell { padding: 14px; } }
     </style>

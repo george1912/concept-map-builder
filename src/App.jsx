@@ -4314,20 +4314,61 @@ export default function App() {
                   </summary>
                   <div className="guide-body">
                     <div className="guide-copy">
-                      <strong>Start with the case log PDF.</strong>
-                      <p>Upload the Typhon case log or paste its text, then run Auto Fill from Case PDF. Cleaner logs give cleaner maps, but every field can be reviewed and edited before export.</p>
+                      <strong>Typhon case log walkthrough</strong>
+                      <p>Use the exported Typhon case log as the source. The builder fills the concept-map draft, then you review the marked fields and export the finished PDF.</p>
                     </div>
-                    <div className="guide-steps">
-                      <div><span>1</span><strong>Upload</strong><small>Use the original case log when possible.</small></div>
-                      <div><span>2</span><strong>Auto Fill</strong><small>Let the builder place the likely fields.</small></div>
-                      <div><span>3</span><strong>Review</strong><small>Fix flagged or blank values.</small></div>
-                      <div><span>4</span><strong>Export</strong><small>Download the formatted concept map PDF.</small></div>
+                    <div className="guide-screens" aria-label="Onboarding walkthrough">
+                      <div className="guide-screen">
+                        <div className="mini-window">
+                          <div className="mini-bar"><span></span><span></span><span></span></div>
+                          <div className="mini-upload">
+                            <Upload size={18} />
+                            <strong>Upload Case PDF</strong>
+                            <small>Typhon case log</small>
+                          </div>
+                        </div>
+                        <strong>1. Add the log</strong>
+                        <p>Upload the case PDF, or paste the case text if the PDF is hard to read.</p>
+                      </div>
+                      <div className="guide-screen">
+                        <div className="mini-window">
+                          <div className="mini-bar"><span></span><span></span><span></span></div>
+                          <div className="mini-actions">
+                            <span className="mini-button dark">Upload</span>
+                            <span className="mini-button blue">Auto Fill</span>
+                          </div>
+                          <div className="mini-progress"><i></i><i></i><i></i></div>
+                        </div>
+                        <strong>2. Run Auto Fill</strong>
+                        <p>The app places the best available values into the concept-map fields.</p>
+                      </div>
+                      <div className="guide-screen">
+                        <div className="mini-window">
+                          <div className="mini-bar"><span></span><span></span><span></span></div>
+                          <div className="mini-field"><b>Allergies</b><em className="mini-flag gold">Verify</em></div>
+                          <div className="mini-field"><b>Edema</b><em className="mini-flag rose">Missing</em></div>
+                          <div className="mini-field"><b>Medication</b><em className="mini-flag plum">AI generated</em></div>
+                        </div>
+                        <strong>3. Review flags</strong>
+                        <p>Marked values need your eyes before the final export.</p>
+                      </div>
+                      <div className="guide-screen">
+                        <div className="mini-window">
+                          <div className="mini-bar"><span></span><span></span><span></span></div>
+                          <div className="mini-map">
+                            <span></span><span></span><span></span><span></span>
+                            <strong>PDF</strong>
+                          </div>
+                        </div>
+                        <strong>4. Export the map</strong>
+                        <p>Download the formatted concept map PDF after the fields look right.</p>
+                      </div>
                     </div>
                     <div className="guide-flags">
-                      <span className="guide-flag missing">Missing means no clear source value was found.</span>
-                      <span className="guide-flag verify">Verify means the field should be checked against the chart or case log.</span>
-                      <span className="guide-flag generated">AI generated means the app supplied a likely fill-in and needs your review.</span>
-                      <span className="guide-flag limit">PDF limit means shorten it so it fits the concept map box.</span>
+                      <span className="guide-flag missing">Missing: no clear source value was found.</span>
+                      <span className="guide-flag verify">Verify: check this against the chart or case log.</span>
+                      <span className="guide-flag generated">AI generated: review before submitting.</span>
+                      <span className="guide-flag limit">PDF limit: shorten text so it fits the box.</span>
                     </div>
                   </div>
                 </details>
@@ -4378,7 +4419,6 @@ export default function App() {
               <div className="intake-actions">
                 <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload Case PDF</button>
                 <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill From Case PDF</button>
-                <button className="btn test-action" onClick={fillSpacingTestData} disabled={loading || aiLoading}><Wand2 size={16} />Fill Empty Fields With Sample Data</button>
               </div>
               <details className="source-panel">
                 <summary>
