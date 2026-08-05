@@ -1440,8 +1440,8 @@ const CONCEPT_MAP_FIELD_GROUPS = [
   {
     title: 'Priority Nursing Diagnosis #1',
     fields: [
-      ['nd1Assessment', 'Client Assessment'],
       ['nd1Diagnosis', 'Nursing Diagnosis'],
+      ['nd1Assessment', 'Client Assessment'],
       ['nd1Rationale', 'Scientific Rationale'],
       ['nd1Intervention', 'Nursing Intervention / Action'],
       ['nd1Evaluation', 'Evaluation / Client Response'],
@@ -1450,8 +1450,8 @@ const CONCEPT_MAP_FIELD_GROUPS = [
   {
     title: 'Priority Nursing Diagnosis #2',
     fields: [
-      ['nd2Assessment', 'Client Assessment'],
       ['nd2Diagnosis', 'Nursing Diagnosis'],
+      ['nd2Assessment', 'Client Assessment'],
       ['nd2Rationale', 'Scientific Rationale'],
       ['nd2Intervention', 'Nursing Intervention / Action'],
       ['nd2Evaluation', 'Evaluation / Client Response'],
@@ -1460,8 +1460,8 @@ const CONCEPT_MAP_FIELD_GROUPS = [
   {
     title: 'Priority Nursing Diagnosis #3',
     fields: [
-      ['nd3Assessment', 'Client Assessment'],
       ['nd3Diagnosis', 'Nursing Diagnosis'],
+      ['nd3Assessment', 'Client Assessment'],
       ['nd3Rationale', 'Scientific Rationale'],
       ['nd3Intervention', 'Nursing Intervention / Action'],
       ['nd3Evaluation', 'Evaluation / Client Response'],
