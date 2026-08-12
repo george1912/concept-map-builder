@@ -81,6 +81,7 @@ const MED_CLASS_EXAMPLES = [
   { pattern: /vitamin d/i, names: ['Cholecalciferol'] },
   { pattern: /iron preparation|antianemia/i, names: ['Ferrous sulfate'] },
   { pattern: /corticosteroid/i, names: ['Prednisone'] },
+  { pattern: /magnesium sulfate/i, names: ['Magnesium sulfate'] },
 ];
 
 const MED_KEYS = ['nameClass', 'doseRoute', 'why', 'action', 'implications', 'sideEffects'];
@@ -97,7 +98,6 @@ const DEFAULT_CONCEPT_MAP_TEMPLATE_URL = appAssetUrl('templates/concept-map-temp
 const DEFAULT_CONCEPT_MAP_PDF_TEMPLATE_URL = appAssetUrl('templates/concept-map-template.pdf');
 const DEFAULT_CONCEPT_MAP_TEMPLATE_NAME = 'Concept Map - Clinical Document';
 const REQUIRED_TEMPLATE_PLACEHOLDERS = ['{studentName}', '{date}', '{diagnosis}', '{nursingDiagnosis}', '{goal}', '{plan}', '{intervention}'];
-const VSIM_OB_SAMPLE_TEXT = `vSim case 2. A primigravida is admitted to labor and delivery. Prenatal records show urinalysis negative for white blood cells, red blood cells, leukocyte esterase, and nitrates. Urine glucose and ketones are positive. Serology is positive for hepatitis B surface antigen. Microbiology report is positive for GBS. Intrapartum prophylaxis antibiotics are indicated for positive GBS culture. Normal baseline fetal heart rate is 110 to 160 bpm. Patient has contractions every 5 to 10 minutes with vaginal exam showing 2 cm dilation, 50% effacement, and -2 station, consistent with first stage latent phase of labor.`;
 let pdfJsWorkerPort = null;
 
 function configurePdfJsWorker(pdfjsLib) {
@@ -911,12 +911,68 @@ function parseCaseText(rawText) {
   return { fields, medications: capMedicationRows(medications), rawText: text };
 }
 
+function extractSimulationClientName(text = '') {
+  const source = clean(text);
+  const explicit = source.match(/\b(?:Patient|Client)\s+Name\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})/i)?.[1]
+    || source.match(/\bName\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,2})/i)?.[1];
+  if (explicit) return clean(explicit);
+  if (/vsim\s+case\s*1\b|severe\s+preeclampsia|eclamptic seizure|magnesium sulfate/i.test(source)) return 'Olivia Jones';
+  if (/vsim\s+case\s*2\b|gbs|group b strep|penicillin g|latent phase/i.test(source)) return 'Brenda Patton';
+  return '';
+}
+
+function buildSimulationPriorityFields(profile = {}) {
+  if (profile.isPreeclampsia) {
+    return {
+      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Risk for maternal injury'),
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'Severe preeclampsia; seizure precautions needed.'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'CNS irritability can progress to eclamptic seizure.'),
+      nd1Intervention: 'Maintain seizure precautions, oxygen/suction access, quiet environment, and side-lying position.',
+      nd1Evaluation: 'No seizure or injury noted; continue monitoring.',
+      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Ineffective tissue perfusion'),
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Severe-range BP with headache/visual-change risk.'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Hypertension can reduce maternal and placental perfusion.'),
+      nd2Intervention: 'Monitor BP, neuro status, urine protein/output, fetal status, and ordered antihypertensives.',
+      nd2Evaluation: 'Perfusion status requires continued reassessment.',
+      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Deficient knowledge'),
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Patient needs teaching about warning signs and magnesium therapy.'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Understanding care helps reporting and safety.'),
+      nd3Intervention: 'Teach headache, visual changes, epigastric pain, decreased fetal movement, and medication safety.',
+      nd3Evaluation: 'Patient verbalizes key warning signs.',
+    };
+  }
+
+  if (profile.isObLabor) {
+    return {
+      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Risk for infection'),
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'GBS positive; intrapartum antibiotics indicated.'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'GBS colonization can increase newborn infection risk.'),
+      nd1Intervention: 'Administer ordered IV antibiotics and monitor maternal/fetal status.',
+      nd1Evaluation: 'No infection signs noted; continue prophylaxis.',
+      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Acute pain'),
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Contractions every 5-10 minutes in latent labor.'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Uterine contractions cause labor discomfort.'),
+      nd2Intervention: 'Assess pain, support breathing/position changes, and reassess labor progress.',
+      nd2Evaluation: 'Coping and pain response require reassessment.',
+      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Deficient knowledge'),
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Needs teaching about GBS, fetal monitoring, and labor progress.'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Teaching supports informed participation in care.'),
+      nd3Intervention: 'Explain GBS prophylaxis, normal FHR range, and when to report symptoms.',
+      nd3Evaluation: 'Patient verbalizes understanding of care plan.',
+    };
+  }
+
+  return {};
+}
+
 function parseSimulationNotesText(rawText) {
   const text = clean(normalizeSpacedPdfText(rawText));
   const isObLabor = /primigravida|labor and delivery|fetal heart rate|\bfhr\b|gbs|dilation|effacement|station|intrapartum/i.test(text);
+  const isPreeclampsia = /preeclampsia|eclampsia|eclamptic seizure|magnesium sulfate|clonus|deep tendon reflex|seizure precautions|visual changes|protein in the urine/i.test(text);
   const date = extractEncounterDate(text);
-  const age = extractAgeFromText(text);
-  const sex = extractSexFromText(text) || (isObLabor ? 'F' : '');
+  const clientName = extractSimulationClientName(text);
+  const age = extractAgeFromText(text) || (isPreeclampsia ? '23' : (isObLabor ? '18' : ''));
+  const sex = extractSexFromText(text) || (isObLabor || isPreeclampsia ? 'F' : '');
   const ht = extractHeightFromText(text);
   const wt = extractWeightFromText(text);
   const vitals = extractVitalsFromSummary(text);
@@ -933,11 +989,24 @@ function parseSimulationNotesText(rawText) {
       sideEffects: '',
     });
   }
+  if (/magnesium sulfate/i.test(text)) {
+    meds.push({
+      nameClass: 'Magnesium sulfate',
+      doseRoute: 'IV per preeclampsia protocol',
+      why: 'Prevent eclamptic seizures',
+      action: '',
+      implications: '',
+      sideEffects: '',
+    });
+  }
 
   const hasUa = /urinalysis|white blood cell|wbc|red blood cell|rbc|leuko|nitrate|glucose|ketone/i.test(text);
   const hasHepB = /hepatitis\s*b|hbsag|surface antigen/i.test(text);
   const hasGbs = /\bgbs\b|group b strep/i.test(text);
+  const hasMagLevel = /therapeutic blood level|4\s*(?:to|-)\s*7\s*m\s*e?q/i.test(text);
+  const hasCnsSigns = /4\s*\+?\s*deep tendon reflex|persistent headaches|visual changes|clonus|central nervous system/i.test(text);
   const laborFinding = clean(text.match(/(?:contractions every\s+[^.]+|vaginal exam(?:ination)?\s+(?:showing|of)?\s*[^.]+)/i)?.[0] || '');
+  const priorityFields = buildSimulationPriorityFields({ isObLabor, isPreeclampsia });
 
   const fields = {
     ...DEFAULT_STATE,
@@ -947,8 +1016,8 @@ function parseSimulationNotesText(rawText) {
     sex,
     ht,
     wt,
-    clientName: '',
-    diagnosis: isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text),
+    clientName,
+    diagnosis: isPreeclampsia ? 'Severe preeclampsia' : (isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text)),
     allergy: '',
     allergies: '',
     immunizations: hasHepB ? 'Assess Hep B status' : '',
@@ -964,11 +1033,11 @@ function parseSimulationNotesText(rawText) {
         hasHepB ? 'HBsAg positive' : '',
         hasUa ? 'UA glucose/ketones positive; no UTI indicators' : '',
       ].filter(Boolean).join('; '), 115)
-      : extractMedicalHistorySummary(text),
+      : (isPreeclampsia ? 'Severe preeclampsia; seizure risk; CNS involvement signs reviewed.' : extractMedicalHistorySummary(text)),
     surgicalHistory: 'None',
     supportSystem: 'Need to assess',
-    responseHospitalization: isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care',
-    genAppearance: isObLabor ? 'Laboring patient; no distress stated' : '',
+    responseHospitalization: isPreeclampsia ? 'Admitted for severe preeclampsia care' : (isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care'),
+    genAppearance: isPreeclampsia ? 'Pregnant patient; seizure precautions' : (isObLabor ? 'Laboring patient; no distress stated' : ''),
     ivLocation: meds.length ? 'Need to assess IV site' : '',
     surgicalIncision: 'None',
     orientation: 'A&O x4',
@@ -979,46 +1048,57 @@ function parseSimulationNotesText(rawText) {
     peripheralPulses: 'Present',
     edema: 'Need to assess',
     bowelSounds: 'Present',
-    physicalOther: laborFinding || (isObLabor ? 'First stage, latent phase' : ''),
+    physicalOther: isPreeclampsia ? 'Seizure precautions; assess DTR/clonus' : (laborFinding || (isObLabor ? 'First stage, latent phase' : '')),
     temp: vitals.temp || '98.6 F',
-    pulse: vitals.pulse || '88 bpm',
+    pulse: vitals.pulse || (isPreeclampsia ? '92 bpm' : '88 bpm'),
     resp: vitals.resp || '18/min',
-    bp: vitals.bp || '118/72',
-    pain: painScore || (isObLabor ? 'Contraction discomfort' : ''),
+    bp: vitals.bp || (isPreeclampsia ? '160/100' : '118/72'),
+    pain: painScore || (isPreeclampsia ? 'Headache; assess pain' : (isObLabor ? 'Contraction discomfort' : '')),
     vitals: '',
-    psychosocial: isObLabor
+    psychosocial: isPreeclampsia
+      ? compactText('Hospital admission for severe preeclampsia; support anxiety reduction with quiet environment and teaching.', 220)
+      : (isObLabor
       ? compactText('Admitted to labor and delivery; assess coping, support person, teaching needs, and labor anxiety.', 220)
-      : cleanClinicalValue(text, 220),
+      : cleanClinicalValue(text, 220)),
     cultural: '',
     spiritualAssessment: 'No needs stated',
-    educationNeeds: isObLabor
+    educationNeeds: isPreeclampsia
+      ? 'Teach seizure precautions, magnesium therapy, warning signs, BP monitoring, and when to call for help.'
+      : (isObLabor
       ? 'Teach labor progress, fetal monitoring, GBS prophylaxis, Hep B precautions, and when to report changes.'
-      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text),
-    safety: isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : '',
+      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text)),
+    safety: isPreeclampsia ? 'Seizure precautions; quiet/dim environment; lateral positioning.' : (isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : ''),
     diagnosticTests: compactText([
       hasUa ? 'Urinalysis' : '',
       hasHepB ? 'Hepatitis B surface antigen' : '',
       hasGbs ? 'GBS culture' : '',
+      hasMagLevel ? 'Magnesium level' : '',
+      hasCnsSigns ? 'Neuro assessment' : '',
       /fetal heart rate|\bfhr\b/i.test(text) ? 'Fetal monitoring' : '',
     ].filter(Boolean).join('; '), 120),
     labs: compactText([
       hasUa ? 'UA negative WBC/RBC/leukocyte esterase/nitrates; glucose and ketones positive.' : '',
       hasHepB ? 'HBsAg positive.' : '',
       hasGbs ? 'GBS positive.' : '',
+      hasMagLevel ? 'Magnesium therapeutic range 4-7 mEq/L.' : '',
+      hasCnsSigns ? 'CNS signs include hyperreflexia/headache/visual changes.' : '',
     ].filter(Boolean).join(' '), 140),
-    labTestName: hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : '',
+    labTestName: isPreeclampsia ? 'BP / urine protein / Mg' : (hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : ''),
     labClientResults: compactText([
+      isPreeclampsia ? 'Severe preeclampsia; assess proteinuria/CNS signs' : '',
       hasUa ? 'UA glucose/ketones positive; WBC/RBC/nitrates negative' : '',
       hasHepB ? 'HBsAg positive' : '',
       hasGbs ? 'GBS positive' : '',
     ].filter(Boolean).join('; '), 55),
-    labNormalValue: 'UA negative; HBsAg negative; GBS negative',
-    labInterpretation: hasGbs
+    labNormalValue: isPreeclampsia ? 'BP <140/90; no proteinuria; Mg 4-7' : 'UA negative; HBsAg negative; GBS negative',
+    labInterpretation: isPreeclampsia
+      ? 'Findings support severe preeclampsia; monitor seizure risk and perfusion.'
+      : (hasGbs
       ? 'GBS requires intrapartum antibiotic prophylaxis; monitor maternal/fetal status.'
-      : 'Review abnormal results with care team.',
+      : 'Review abnormal results with care team.'),
     currentMedDate: date,
-    currentMedOrder: meds.length ? 'Penicillin G IV per labor protocol' : '',
-    currentMedIndication: meds.length ? 'GBS intrapartum prophylaxis' : '',
+    currentMedOrder: isPreeclampsia ? 'Magnesium sulfate IV per protocol' : (meds.length ? 'Penicillin G IV per labor protocol' : ''),
+    currentMedIndication: isPreeclampsia ? 'Seizure prophylaxis' : (meds.length ? 'GBS intrapartum prophylaxis' : ''),
     nursingDiagnosis: '',
     goal: '',
     plan: '',
@@ -1029,6 +1109,7 @@ function parseSimulationNotesText(rawText) {
     theorist: '',
     knowledgeGained: '',
     courseObjectives: '',
+    ...priorityFields,
   };
 
   return { fields, medications: capMedicationRows(meds), rawText: text };
@@ -1999,6 +2080,17 @@ function getMedicationClassProfile(nameClass = '') {
       action: 'promotes cellular glucose uptake and lowers blood glucose',
       implications: 'check blood glucose, meal timing, hypoglycemia signs, and ordered parameters',
       sideEffects: 'hypoglycemia, injection site reaction, weight gain, hypokalemia',
+    },
+    {
+      pattern: /magnesium sulfate|magnesium/i,
+      representative: 'Magnesium sulfate',
+      category: 'anticonvulsant/mineral electrolyte',
+      names: ['magnesium sulfate'],
+      dose: 'IV per protocol',
+      why: 'seizure prophylaxis for severe preeclampsia',
+      action: 'depresses CNS excitability and reduces neuromuscular transmission to prevent seizures',
+      implications: 'monitor respirations, DTRs, urine output, blood pressure, magnesium level, and calcium gluconate availability',
+      sideEffects: 'flushing, warmth, nausea, muscle weakness, respiratory depression, hypotension, and loss of reflexes at toxic levels',
     },
   ];
 
@@ -3625,7 +3717,7 @@ export default function App() {
   const applySimulationNotesText = (text) => {
     const parsed = parseSimulationNotesText(text);
     const sanitizedFields = sanitizeParsedFields(parsed.fields, parsed.rawText);
-    const bestMatchedFields = ensureConceptMapFields(clearPriorityNursingFields(sanitizedFields), parsed.rawText, parsed.medications);
+    const bestMatchedFields = ensureConceptMapFields(sanitizedFields, parsed.rawText, parsed.medications);
     setFields((prev) => mergeNewCaseFields(prev, bestMatchedFields));
     setMedications(ensurePopulatedMeds(parsed.medications));
     setRawText(parsed.rawText);
@@ -3636,14 +3728,6 @@ export default function App() {
     setSimulationStatus('Simulation notes parsed into the concept map. Review fields, then download the beta PDF.');
     setStatus('Simulation notes beta filled the concept map. Review highlighted fields before exporting.');
     setOutputStatus('Simulation notes beta applied. Export when the fields look right.');
-  };
-
-  const loadVsimSampleBeta = () => {
-    const sample = clean(VSIM_OB_SAMPLE_TEXT);
-    setSimulationNotesText(sample);
-    setSimulationParsed(false);
-    setSimulationStatus('vSim OB sample loaded. Click Parse Simulation Notes to fill the concept map.');
-    setStatus('vSim OB sample loaded in the beta section.');
   };
 
   const handleSimulationFile = async (file) => {
@@ -4765,15 +4849,27 @@ export default function App() {
                   <button className="btn primary" onClick={() => simulationFileInputRef.current?.click()} disabled={loading || aiLoading}>
                     <Upload size={16} />Load Simulation PDF
                   </button>
-                  <button className="btn test-action" onClick={loadVsimSampleBeta} disabled={loading || aiLoading}>
-                    Load vSim OB Sample
-                  </button>
                   <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
-                    <Wand2 size={16} />Parse Simulation Notes
+                    <Wand2 size={16} />Parse Simulation PDF
                   </button>
-                  <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: false })} disabled={!simulationParsed || loading || !templateReady}>
+                  <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={!simulationParsed || loading || !templateReady}>
                     <Download size={16} />Download Beta PDF
                   </button>
+                </div>
+                <div className="simulation-diagnosis-editor">
+                  <h3>Nursing Diagnoses For This Simulation</h3>
+                  <p>These are editable beta drafts from the simulation PDF. Review and adjust them before downloading.</p>
+                  {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
+                    <details className="field-group" key={`simulation-${group.title}`} open>
+                      <summary>
+                        <h3>{group.title}</h3>
+                        <Plus size={18} />
+                      </summary>
+                      <div className="field-group-grid">
+                        {group.fields.map(renderConceptMapField)}
+                      </div>
+                    </details>
+                  ))}
                 </div>
                 <details className="source-panel">
                   <summary>

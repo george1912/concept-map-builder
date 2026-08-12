@@ -299,12 +299,30 @@
       }
       .beta-action-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         margin-top: 14px;
       }
       .beta-action-grid .btn {
         justify-content: center;
         min-height: 52px;
+      }
+      .simulation-diagnosis-editor {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px dashed rgba(99, 83, 118, 0.38);
+      }
+      .simulation-diagnosis-editor > h3 {
+        margin: 0;
+        font-size: 16px;
+        text-transform: uppercase;
+      }
+      .simulation-diagnosis-editor > p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
       }
       .source-panel summary {
         display: flex; justify-content: space-between; align-items: center; gap: 12px;
