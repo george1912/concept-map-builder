@@ -71,7 +71,7 @@ const MED_CLASS_EXAMPLES = [
   { pattern: /antipsychotic/i, names: ['Risperidone', 'Olanzapine', 'Quetiapine'] },
   { pattern: /antidepressant|ssri|snri/i, names: ['Sertraline', 'Escitalopram', 'Fluoxetine'] },
   { pattern: /mood\s*stabili/i, names: ['Lithium', 'Valproate', 'Lamotrigine'] },
-  { pattern: /antibacterial|antibiotic/i, names: ['Ceftriaxone', 'Amoxicillin'] },
+  { pattern: /antibacterial|antibiotic/i, names: ['Penicillin G', 'Ceftriaxone', 'Amoxicillin'] },
   { pattern: /antithrombotic|anticoagulant/i, names: ['Apixaban'] },
   { pattern: /antilipemic|statin/i, names: ['Atorvastatin'] },
   { pattern: /beta blocker/i, names: ['Metoprolol', 'Carvedilol'] },
@@ -97,6 +97,7 @@ const DEFAULT_CONCEPT_MAP_TEMPLATE_URL = appAssetUrl('templates/concept-map-temp
 const DEFAULT_CONCEPT_MAP_PDF_TEMPLATE_URL = appAssetUrl('templates/concept-map-template.pdf');
 const DEFAULT_CONCEPT_MAP_TEMPLATE_NAME = 'Concept Map - Clinical Document';
 const REQUIRED_TEMPLATE_PLACEHOLDERS = ['{studentName}', '{date}', '{diagnosis}', '{nursingDiagnosis}', '{goal}', '{plan}', '{intervention}'];
+const VSIM_OB_SAMPLE_TEXT = `vSim case 2. A primigravida is admitted to labor and delivery. Prenatal records show urinalysis negative for white blood cells, red blood cells, leukocyte esterase, and nitrates. Urine glucose and ketones are positive. Serology is positive for hepatitis B surface antigen. Microbiology report is positive for GBS. Intrapartum prophylaxis antibiotics are indicated for positive GBS culture. Normal baseline fetal heart rate is 110 to 160 bpm. Patient has contractions every 5 to 10 minutes with vaginal exam showing 2 cm dilation, 50% effacement, and -2 station, consistent with first stage latent phase of labor.`;
 let pdfJsWorkerPort = null;
 
 function configurePdfJsWorker(pdfjsLib) {
@@ -140,6 +141,27 @@ function compactText(value = '', maxLength = 180) {
   const lastStop = Math.max(clipped.lastIndexOf('. '), clipped.lastIndexOf('; '), clipped.lastIndexOf(', '));
   const boundary = lastStop > 80 ? lastStop + 1 : clipped.lastIndexOf(' ');
   return clipped.slice(0, boundary > 80 ? boundary : maxLength).trim();
+}
+
+function normalizeSpacedPdfText(value = '') {
+  return String(value || '')
+    .split(/\n/)
+    .map((line) => line
+      .split(/ {2,}/)
+      .map((chunk) => {
+        const tokens = chunk.trim().split(/\s+/).filter(Boolean);
+        if (tokens.length < 3) return chunk;
+        const singleTextTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
+        const punctuationTokens = tokens.filter((token) => /^[.,:;?!()[\]{}"'&-]$/.test(token)).length;
+        const canJoin = singleTextTokens >= 3 && (singleTextTokens + punctuationTokens) / tokens.length >= 0.82;
+        return canJoin ? tokens.join('') : chunk;
+      })
+      .join(' '))
+    .join('\n')
+    .replace(/&ndash;/gi, '-')
+    .replace(/\s+([.,:;?!])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function parseLocalDate(inputDate = '') {
@@ -887,6 +909,129 @@ function parseCaseText(rawText) {
     });
 
   return { fields, medications: capMedicationRows(medications), rawText: text };
+}
+
+function parseSimulationNotesText(rawText) {
+  const text = clean(normalizeSpacedPdfText(rawText));
+  const isObLabor = /primigravida|labor and delivery|fetal heart rate|\bfhr\b|gbs|dilation|effacement|station|intrapartum/i.test(text);
+  const date = extractEncounterDate(text);
+  const age = extractAgeFromText(text);
+  const sex = extractSexFromText(text) || (isObLabor ? 'F' : '');
+  const ht = extractHeightFromText(text);
+  const wt = extractWeightFromText(text);
+  const vitals = extractVitalsFromSummary(text);
+  const painScore = extractPainScore(text);
+  const meds = [];
+
+  if (/gbs|group b strep|intrapartum prophylaxis|prophylaxis antibiotics/i.test(text)) {
+    meds.push({
+      nameClass: 'Penicillin G (GBS prophylaxis antibiotic)',
+      doseRoute: 'IV per labor protocol',
+      why: 'GBS intrapartum prophylaxis',
+      action: '',
+      implications: '',
+      sideEffects: '',
+    });
+  }
+
+  const hasUa = /urinalysis|white blood cell|wbc|red blood cell|rbc|leuko|nitrate|glucose|ketone/i.test(text);
+  const hasHepB = /hepatitis\s*b|hbsag|surface antigen/i.test(text);
+  const hasGbs = /\bgbs\b|group b strep/i.test(text);
+  const laborFinding = clean(text.match(/(?:contractions every\s+[^.]+|vaginal exam(?:ination)?\s+(?:showing|of)?\s*[^.]+)/i)?.[0] || '');
+
+  const fields = {
+    ...DEFAULT_STATE,
+    date,
+    patientInitialAge: age,
+    age,
+    sex,
+    ht,
+    wt,
+    clientName: '',
+    diagnosis: isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text),
+    allergy: '',
+    allergies: '',
+    immunizations: hasHepB ? 'Assess Hep B status' : '',
+    sleepPattern: 'Need to assess',
+    nutritionalStatus: /glucose|ketone|nausea|vomiting|poor appetite/i.test(text) ? 'Assess nutrition/hydration' : 'Need to assess',
+    assistanceAdls: 'Independent',
+    hygiene: 'Independent',
+    medsPrior: '',
+    medicalHistory: isObLabor
+      ? compactText([
+        'Primigravida in labor',
+        hasGbs ? 'GBS positive' : '',
+        hasHepB ? 'HBsAg positive' : '',
+        hasUa ? 'UA glucose/ketones positive; no UTI indicators' : '',
+      ].filter(Boolean).join('; '), 115)
+      : extractMedicalHistorySummary(text),
+    surgicalHistory: 'None',
+    supportSystem: 'Need to assess',
+    responseHospitalization: isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care',
+    genAppearance: isObLabor ? 'Laboring patient; no distress stated' : '',
+    ivLocation: meds.length ? 'Need to assess IV site' : '',
+    surgicalIncision: 'None',
+    orientation: 'A&O x4',
+    speech: 'Clear',
+    weakness: 'None noted',
+    skinTurgor: /ketone|dehydrat/i.test(text) ? 'Assess hydration' : 'Normal',
+    breathSounds: 'Clear',
+    peripheralPulses: 'Present',
+    edema: 'Need to assess',
+    bowelSounds: 'Present',
+    physicalOther: laborFinding || (isObLabor ? 'First stage, latent phase' : ''),
+    temp: vitals.temp || '98.6 F',
+    pulse: vitals.pulse || '88 bpm',
+    resp: vitals.resp || '18/min',
+    bp: vitals.bp || '118/72',
+    pain: painScore || (isObLabor ? 'Contraction discomfort' : ''),
+    vitals: '',
+    psychosocial: isObLabor
+      ? compactText('Admitted to labor and delivery; assess coping, support person, teaching needs, and labor anxiety.', 220)
+      : cleanClinicalValue(text, 220),
+    cultural: '',
+    spiritualAssessment: 'No needs stated',
+    educationNeeds: isObLabor
+      ? 'Teach labor progress, fetal monitoring, GBS prophylaxis, Hep B precautions, and when to report changes.'
+      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text),
+    safety: isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : '',
+    diagnosticTests: compactText([
+      hasUa ? 'Urinalysis' : '',
+      hasHepB ? 'Hepatitis B surface antigen' : '',
+      hasGbs ? 'GBS culture' : '',
+      /fetal heart rate|\bfhr\b/i.test(text) ? 'Fetal monitoring' : '',
+    ].filter(Boolean).join('; '), 120),
+    labs: compactText([
+      hasUa ? 'UA negative WBC/RBC/leukocyte esterase/nitrates; glucose and ketones positive.' : '',
+      hasHepB ? 'HBsAg positive.' : '',
+      hasGbs ? 'GBS positive.' : '',
+    ].filter(Boolean).join(' '), 140),
+    labTestName: hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : '',
+    labClientResults: compactText([
+      hasUa ? 'UA glucose/ketones positive; WBC/RBC/nitrates negative' : '',
+      hasHepB ? 'HBsAg positive' : '',
+      hasGbs ? 'GBS positive' : '',
+    ].filter(Boolean).join('; '), 55),
+    labNormalValue: 'UA negative; HBsAg negative; GBS negative',
+    labInterpretation: hasGbs
+      ? 'GBS requires intrapartum antibiotic prophylaxis; monitor maternal/fetal status.'
+      : 'Review abnormal results with care team.',
+    currentMedDate: date,
+    currentMedOrder: meds.length ? 'Penicillin G IV per labor protocol' : '',
+    currentMedIndication: meds.length ? 'GBS intrapartum prophylaxis' : '',
+    nursingDiagnosis: '',
+    goal: '',
+    plan: '',
+    intervention: '',
+    rationale: '',
+    evaluation: '',
+    reassessment: '',
+    theorist: '',
+    knowledgeGained: '',
+    courseObjectives: '',
+  };
+
+  return { fields, medications: capMedicationRows(meds), rawText: text };
 }
 
 function buildEducationalNeedsSuggestion(fields, rawText = '') {
@@ -1779,10 +1924,10 @@ function getMedicationClassProfile(nameClass = '') {
       sideEffects: 'constipation, nausea, sedation, dizziness, respiratory depression, pruritus',
     },
     {
-      pattern: /antibiotic|amoxicillin|cef|azithromycin|doxycycline|levofloxacin/,
+      pattern: /antibiotic|penicillin|amoxicillin|cef|azithromycin|doxycycline|levofloxacin/,
       representative: 'Amoxicillin',
       category: 'antibiotic',
-      names: ['amoxicillin', 'cef', 'azithromycin', 'doxycycline', 'levofloxacin'],
+      names: ['penicillin', 'amoxicillin', 'cef', 'azithromycin', 'doxycycline', 'levofloxacin'],
       dose: 'PO/IV q8-24h',
       why: 'suspected or confirmed bacterial infection management',
       action: 'inhibits bacterial growth or viability through class-specific antimicrobial mechanisms',
@@ -3107,7 +3252,7 @@ async function extractPdfText(file, onProgress) {
     }
   }
   if (onProgress) onProgress(100, 'PDF text extraction complete.');
-  return fullText;
+  return normalizeSpacedPdfText(fullText) || fullText;
 }
 
 function normalizeAiFields(rawFields = {}) {
@@ -3471,6 +3616,25 @@ export default function App() {
         ? `Source parse complete. Medication rows are capped at ${MED_TEMPLATE_ROW_CAP}; extra entries were not added. Review flagged fields before export.`
         : 'Source parse complete. Concept-map values were added; app-generated items are flagged for review.'
     );
+  };
+
+  const applySimulationNotesText = (text) => {
+    const parsed = parseSimulationNotesText(text);
+    const sanitizedFields = sanitizeParsedFields(parsed.fields, parsed.rawText);
+    const bestMatchedFields = ensureConceptMapFields(clearPriorityNursingFields(sanitizedFields), parsed.rawText, parsed.medications);
+    setFields((prev) => mergeNewCaseFields(prev, bestMatchedFields));
+    setMedications(ensurePopulatedMeds(parsed.medications));
+    setRawText(parsed.rawText);
+    setSequenceStep((prev) => Math.max(prev, 3));
+    setIsFinalized(false);
+    setStatus('Simulation notes beta filled the concept map. Review highlighted fields before exporting.');
+    setOutputStatus('Simulation notes beta applied. Export when the fields look right.');
+  };
+
+  const loadVsimSampleBeta = () => {
+    const sample = clean(VSIM_OB_SAMPLE_TEXT);
+    setRawText(sample);
+    applySimulationNotesText(sample);
   };
 
   const handleFile = async (file) => {
@@ -4425,6 +4589,24 @@ export default function App() {
                 <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload Case PDF</button>
                 <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill From Case PDF</button>
               </div>
+              <details className="beta-source-panel">
+                <summary>
+                  <span><Wand2 size={16} />Nontraditional notes beta</span>
+                  <ChevronDown size={18} />
+                </summary>
+                <div className="beta-source-body">
+                  <strong>For vSim PDFs, simulation notes, or narrative case notes.</strong>
+                  <p>This beta uses best-fit matching to fill the concept map from notes that are not formatted like a Typhon case log. Anything unclear should be reviewed in the fields before export.</p>
+                  <div className="beta-source-actions">
+                    <button className="btn" onClick={() => applySimulationNotesText(rawText)} disabled={!rawText.trim() || loading || aiLoading}>
+                      <Wand2 size={16} />Auto Fill From Simulation Notes
+                    </button>
+                    <button className="btn test-action" onClick={loadVsimSampleBeta} disabled={loading || aiLoading}>
+                      Load vSim OB Sample
+                    </button>
+                  </div>
+                </div>
+              </details>
               <details className="source-panel">
                 <summary>
                   <span>{rawText.trim() ? 'Source text captured' : 'Paste case text manually'}</span>

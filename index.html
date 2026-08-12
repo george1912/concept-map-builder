@@ -269,6 +269,23 @@
       .source-panel {
         border: 1px solid var(--border); border-radius: 6px; margin-top: 14px; background: var(--ink-white);
       }
+      .beta-source-panel {
+        border: 1px dashed rgba(99, 83, 118, 0.48); border-radius: 6px; margin-top: 12px;
+        background: rgba(227, 217, 234, 0.30); overflow: hidden;
+      }
+      .beta-source-panel summary {
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+        cursor: pointer; list-style: none; padding: 12px 14px; font-weight: 900; color: var(--pastel-plum-text);
+      }
+      .beta-source-panel summary span { display: inline-flex; align-items: center; gap: 8px; }
+      .beta-source-panel summary::-webkit-details-marker { display: none; }
+      .beta-source-panel summary svg { transition: transform 0.15s ease; flex: 0 0 auto; }
+      .beta-source-panel[open] summary { border-bottom: 1px dashed rgba(99, 83, 118, 0.38); }
+      .beta-source-panel[open] summary > svg { transform: rotate(180deg); }
+      .beta-source-body { display: grid; gap: 10px; padding: 14px; background: rgba(255,255,251,0.68); }
+      .beta-source-body strong { color: var(--text); }
+      .beta-source-body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+      .beta-source-actions { display: flex; gap: 8px; flex-wrap: wrap; }
       .source-panel summary {
         display: flex; justify-content: space-between; align-items: center; gap: 12px;
         cursor: pointer; list-style: none; padding: 13px 14px; font-weight: 700; color: var(--muted);
