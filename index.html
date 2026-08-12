@@ -286,6 +286,26 @@
       .beta-source-body strong { color: var(--text); }
       .beta-source-body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
       .beta-source-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .simulation-beta-card {
+        border-style: dashed;
+        border-color: rgba(99, 83, 118, 0.62);
+        background: linear-gradient(135deg, rgba(255, 255, 251, 0.98), rgba(227, 217, 234, 0.28));
+      }
+      .beta-intro {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .beta-action-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-top: 14px;
+      }
+      .beta-action-grid .btn {
+        justify-content: center;
+        min-height: 52px;
+      }
       .source-panel summary {
         display: flex; justify-content: space-between; align-items: center; gap: 12px;
         cursor: pointer; list-style: none; padding: 13px 14px; font-weight: 700; color: var(--muted);
@@ -463,7 +483,7 @@
         padding: 16px; max-height: 38vh; overflow: auto; font-size: 12px; line-height: 1.45;
       }
       @media (max-width: 900px) {
-        .signal-list, .intake-actions, .guide-screens, .med-grid, .export-choice { grid-template-columns: 1fr; }
+        .signal-list, .intake-actions, .guide-screens, .med-grid, .export-choice, .beta-action-grid { grid-template-columns: 1fr; }
       }
       @media (max-width: 700px) { .split-2, .field-group-grid, .inline-save-row { grid-template-columns: 1fr; } .app-shell { padding: 14px; } }
     </style>

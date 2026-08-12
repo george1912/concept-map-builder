@@ -3418,6 +3418,9 @@ export default function App() {
   const [fields, setFields] = useState(DEFAULT_STATE);
   const [medications, setMedications] = useState(MED_DEFAULT);
   const [rawText, setRawText] = useState('');
+  const [simulationNotesText, setSimulationNotesText] = useState('');
+  const [simulationParsed, setSimulationParsed] = useState(false);
+  const [simulationStatus, setSimulationStatus] = useState('Load a simulation PDF or sample, then parse it into the concept map.');
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [openAiApiKey, setOpenAiApiKey] = useState('');
@@ -3454,6 +3457,7 @@ export default function App() {
   const [articleHistory, setArticleHistory] = useState([]);
   const [sessionFacultyName, setSessionFacultyName] = useState('');
   const fileInputRef = useRef(null);
+  const simulationFileInputRef = useRef(null);
   const hasAutoAdvancedStep1Ref = useRef(false);
 
   const metadataReady = useMemo(() => {
@@ -3625,16 +3629,44 @@ export default function App() {
     setFields((prev) => mergeNewCaseFields(prev, bestMatchedFields));
     setMedications(ensurePopulatedMeds(parsed.medications));
     setRawText(parsed.rawText);
+    setSimulationNotesText(parsed.rawText);
+    setSimulationParsed(true);
     setSequenceStep((prev) => Math.max(prev, 3));
     setIsFinalized(false);
+    setSimulationStatus('Simulation notes parsed into the concept map. Review fields, then download the beta PDF.');
     setStatus('Simulation notes beta filled the concept map. Review highlighted fields before exporting.');
     setOutputStatus('Simulation notes beta applied. Export when the fields look right.');
   };
 
   const loadVsimSampleBeta = () => {
     const sample = clean(VSIM_OB_SAMPLE_TEXT);
-    setRawText(sample);
-    applySimulationNotesText(sample);
+    setSimulationNotesText(sample);
+    setSimulationParsed(false);
+    setSimulationStatus('vSim OB sample loaded. Click Parse Simulation Notes to fill the concept map.');
+    setStatus('vSim OB sample loaded in the beta section.');
+  };
+
+  const handleSimulationFile = async (file) => {
+    if (!file) return;
+    setLoading(true);
+    setProgress(5, 'Preparing simulation PDF extraction...');
+    setSimulationParsed(false);
+    setSimulationStatus('Extracting simulation notes from PDF...');
+    setStatus('Extracting simulation PDF text...');
+    try {
+      const text = await extractPdfText(file, (value, label) => setProgress(value, label));
+      setSimulationNotesText(clean(text));
+      setProgress(100, 'Simulation PDF text ready.');
+      setSimulationStatus('Simulation notes loaded. Click Parse Simulation Notes to fill the concept map.');
+      setStatus('Simulation PDF text extracted in the beta section.');
+    } catch (err) {
+      console.error(err);
+      setProgress(0, '');
+      setSimulationStatus('Simulation PDF extraction failed. Paste the notes into the beta source box.');
+      setStatus('Simulation PDF extraction failed. Paste notes manually in the beta section.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFile = async (file) => {
@@ -4518,6 +4550,7 @@ export default function App() {
             </button>
           </div>
           <input ref={fileInputRef} type="file" accept="application/pdf" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
+          <input ref={simulationFileInputRef} type="file" accept="application/pdf" hidden onChange={(e) => handleSimulationFile(e.target.files?.[0])} />
         </div>
 
         {typhonGuide}
@@ -4589,24 +4622,6 @@ export default function App() {
                 <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload Case PDF</button>
                 <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill From Case PDF</button>
               </div>
-              <details className="beta-source-panel">
-                <summary>
-                  <span><Wand2 size={16} />Nontraditional notes beta</span>
-                  <ChevronDown size={18} />
-                </summary>
-                <div className="beta-source-body">
-                  <strong>For vSim PDFs, simulation notes, or narrative case notes.</strong>
-                  <p>This beta uses best-fit matching to fill the concept map from notes that are not formatted like a Typhon case log. Anything unclear should be reviewed in the fields before export.</p>
-                  <div className="beta-source-actions">
-                    <button className="btn" onClick={() => applySimulationNotesText(rawText)} disabled={!rawText.trim() || loading || aiLoading}>
-                      <Wand2 size={16} />Auto Fill From Simulation Notes
-                    </button>
-                    <button className="btn test-action" onClick={loadVsimSampleBeta} disabled={loading || aiLoading}>
-                      Load vSim OB Sample
-                    </button>
-                  </div>
-                </div>
-              </details>
               <details className="source-panel">
                 <summary>
                   <span>{rawText.trim() ? 'Source text captured' : 'Paste case text manually'}</span>
@@ -4735,6 +4750,47 @@ export default function App() {
                     <Download size={16} />Download With Priorities
                   </button>
                 </div>
+              </div>
+            </section>
+
+            <section className="card simulation-beta-card">
+              <div className="card-header"><h2 className="card-title"><Wand2 size={18} style={{verticalAlign:'text-bottom', marginRight:8}} />Nontraditional Notes Beta</h2></div>
+              <div className="card-content">
+                <div className="status export-status">
+                  <strong>Simulation Beta Status</strong>
+                  <div>{simulationStatus}</div>
+                </div>
+                <p className="beta-intro">Use this separate beta flow for vSim PDFs, simulation notes, or narrative case notes that are not formatted like a Typhon case log.</p>
+                <div className="beta-source-actions beta-action-grid">
+                  <button className="btn primary" onClick={() => simulationFileInputRef.current?.click()} disabled={loading || aiLoading}>
+                    <Upload size={16} />Load Simulation PDF
+                  </button>
+                  <button className="btn test-action" onClick={loadVsimSampleBeta} disabled={loading || aiLoading}>
+                    Load vSim OB Sample
+                  </button>
+                  <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
+                    <Wand2 size={16} />Parse Simulation Notes
+                  </button>
+                  <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: false })} disabled={!simulationParsed || loading || !templateReady}>
+                    <Download size={16} />Download Beta PDF
+                  </button>
+                </div>
+                <details className="source-panel">
+                  <summary>
+                    <span>{simulationNotesText.trim() ? 'Simulation source loaded' : 'Paste simulation notes manually'}</span>
+                    <ChevronDown size={18} />
+                  </summary>
+                  <textarea
+                    className="large-text"
+                    value={simulationNotesText}
+                    onChange={(e) => {
+                      setSimulationNotesText(e.target.value);
+                      setSimulationParsed(false);
+                      setSimulationStatus('Simulation notes changed. Parse again before downloading the beta PDF.');
+                    }}
+                    placeholder="Simulation PDF text appears here. You can paste vSim notes or narrative simulation notes here."
+                  />
+                </details>
               </div>
             </section>
           </div>
