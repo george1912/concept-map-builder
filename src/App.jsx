@@ -913,13 +913,28 @@ function parseCaseText(rawText) {
   return { fields, medications: capMedicationRows(medications), rawText: text };
 }
 
-function extractSimulationClientName(text = '') {
+function extractVsimCaseNumber(value = '') {
+  return clean(normalizeSpacedPdfText(value)).match(/\bv[\s-]*sim[\s-]*(?:case[\s-]*)?([1-5])\b/i)?.[1] || '';
+}
+
+function extractSimulationClientName(text = '', sourceHint = '') {
   const source = clean(text);
+  const caseHint = extractVsimCaseNumber(sourceHint) || extractVsimCaseNumber(source.slice(0, 600));
+  if (caseHint === '1') return 'Olivia Jones';
+  if (caseHint === '2') return 'Brenda Patton';
+  if (caseHint === '3') return 'Amelia Sung';
+  if (caseHint === '4') return 'Carla Hernandez';
+  if (caseHint === '5') return 'Fatime Sanogo';
   const explicit = source.match(/\b(?:Patient|Client)\s+Name\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})/i)?.[1]
     || source.match(/\bName\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,2})/i)?.[1];
   if (explicit) return clean(explicit);
   if (/Fatime\s+Sanogo/i.test(source)) return 'Fatime Sanogo';
+  if (/Carla\s+Hernandez/i.test(source)) return 'Carla Hernandez';
+  if (/Amelia\s+Sung/i.test(source)) return 'Amelia Sung';
+  if (/Olivia\s+Jones/i.test(source)) return 'Olivia Jones';
   if (/Brenda\s+Patton/i.test(source) && !/Fatime\s+Sanogo/i.test(source)) return 'Brenda Patton';
+  if (/vsim\s*3\b|shoulder dystocia|mcroberts|suprapubic pressure/i.test(source)) return 'Amelia Sung';
+  if (/vsim\s*4\b|prolapsed cord|cord prolapse|umbilical cord/i.test(source)) return 'Carla Hernandez';
   if (/vsim\s+case\s*1\b|severe\s+preeclampsia|eclamptic seizure|magnesium sulfate/i.test(source)) return 'Olivia Jones';
   if (/vsim\s+case\s*2\b|gbs|group b strep|penicillin g|latent phase/i.test(source)) return 'Brenda Patton';
   return '';
@@ -928,17 +943,17 @@ function extractSimulationClientName(text = '') {
 function buildSimulationPriorityFields(profile = {}) {
   if (profile.isPostpartumHemorrhage) {
     return {
-      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Deficient fluid volume'),
+      nd1Diagnosis: 'Deficient fluid volume',
       nd1Assessment: withPriorityPrompt('nd1Assessment', 'QBL 800 mL, BP 90/50, HR 120, weakness.'),
       nd1Rationale: withPriorityPrompt('nd1Rationale', 'Blood loss decreases circulating volume and perfusion.'),
       nd1Intervention: 'Quantify bleeding, monitor VS/LOC/urine output, maintain IV access, and prepare blood products.',
       nd1Evaluation: 'Bleeding and perfusion require continued reassessment.',
-      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Ineffective tissue perfusion'),
+      nd2Diagnosis: 'Ineffective tissue perfusion',
       nd2Assessment: withPriorityPrompt('nd2Assessment', 'Tachycardia, hypotension, and decreased urine-output risk.'),
       nd2Rationale: withPriorityPrompt('nd2Rationale', 'Hypovolemia can reduce cerebral and organ perfusion.'),
       nd2Intervention: 'Assess LOC, capillary refill, urine output, CBC/type-crossmatch, and response to fluids/blood.',
       nd2Evaluation: 'Perfusion improves with stable VS and urine output.',
-      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Impaired urinary elimination'),
+      nd3Diagnosis: 'Impaired urinary elimination',
       nd3Assessment: withPriorityPrompt('nd3Assessment', 'Distended bladder displaces uterus and worsens atony.'),
       nd3Rationale: withPriorityPrompt('nd3Rationale', 'Full bladder prevents effective uterine contraction.'),
       nd3Intervention: 'Assist voiding or catheterization per order and reassess fundus midline/firmness.',
@@ -946,19 +961,59 @@ function buildSimulationPriorityFields(profile = {}) {
     };
   }
 
+  if (profile.isCordProlapse) {
+    return {
+      nd1Diagnosis: 'Impaired fetal gas exchange',
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'Prolapsed cord with variable decelerations/compression.'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'Cord compression can interrupt fetal oxygen delivery.'),
+      nd1Intervention: 'Call for help, elevate presenting part, reposition knee-chest/Trendelenburg, and monitor FHR.',
+      nd1Evaluation: 'FHR pattern and fetal status require urgent reassessment.',
+      nd2Diagnosis: 'Anxiety',
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Emergency cesarean preparation creates acute stress.'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Clear communication can reduce fear during emergency care.'),
+      nd2Intervention: 'Explain actions briefly, keep support person informed, and maintain calm direction.',
+      nd2Evaluation: 'Patient/support person verbalize understanding of emergency plan.',
+      nd3Diagnosis: 'Risk for maternal injury',
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Emergency surgery and rapid positioning are required.'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Urgent interventions increase procedural safety needs.'),
+      nd3Intervention: 'Maintain IV access, prepare consent/labs, apply safety positioning, and coordinate OR transfer.',
+      nd3Evaluation: 'Patient transferred safely for definitive care.',
+    };
+  }
+
+  if (profile.isShoulderDystocia) {
+    return {
+      nd1Diagnosis: 'Impaired fetal gas exchange',
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'Shoulder dystocia with delayed body delivery.'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'Prolonged dystocia can reduce fetal oxygenation.'),
+      nd1Intervention: 'Call for help, document times, assist McRoberts maneuver, and prepare newborn resuscitation.',
+      nd1Evaluation: 'Fetal/newborn status assessed immediately after delivery.',
+      nd2Diagnosis: 'Acute pain',
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Emergency maneuvers and labor increase discomfort.'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Dystocia care may intensify perineal and musculoskeletal pain.'),
+      nd2Intervention: 'Support positioning, coach breathing, reassess pain, and provide comfort measures.',
+      nd2Evaluation: 'Pain/coping response requires reassessment after birth.',
+      nd3Diagnosis: 'Risk for birth injury',
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Macrosomia/shoulder dystocia increases brachial plexus risk.'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Traction and shoulder impaction can injure newborn structures.'),
+      nd3Intervention: 'Avoid fundal pressure, assist approved maneuvers, and assess newborn clavicle/arm movement.',
+      nd3Evaluation: 'Newborn assessed for movement, Apgar, and injury signs.',
+    };
+  }
+
   if (profile.isPreeclampsia) {
     return {
-      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Risk for maternal injury'),
+      nd1Diagnosis: 'Risk for maternal injury',
       nd1Assessment: withPriorityPrompt('nd1Assessment', 'Severe preeclampsia; seizure precautions needed.'),
       nd1Rationale: withPriorityPrompt('nd1Rationale', 'CNS irritability can progress to eclamptic seizure.'),
       nd1Intervention: 'Maintain seizure precautions, oxygen/suction access, quiet environment, and side-lying position.',
       nd1Evaluation: 'No seizure or injury noted; continue monitoring.',
-      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Ineffective tissue perfusion'),
+      nd2Diagnosis: 'Ineffective tissue perfusion',
       nd2Assessment: withPriorityPrompt('nd2Assessment', 'Severe-range BP with headache/visual-change risk.'),
       nd2Rationale: withPriorityPrompt('nd2Rationale', 'Hypertension can reduce maternal and placental perfusion.'),
       nd2Intervention: 'Monitor BP, neuro status, urine protein/output, fetal status, and ordered antihypertensives.',
       nd2Evaluation: 'Perfusion status requires continued reassessment.',
-      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Deficient knowledge'),
+      nd3Diagnosis: 'Deficient knowledge',
       nd3Assessment: withPriorityPrompt('nd3Assessment', 'Patient needs teaching about warning signs and magnesium therapy.'),
       nd3Rationale: withPriorityPrompt('nd3Rationale', 'Understanding care helps reporting and safety.'),
       nd3Intervention: 'Teach headache, visual changes, epigastric pain, decreased fetal movement, and medication safety.',
@@ -968,17 +1023,17 @@ function buildSimulationPriorityFields(profile = {}) {
 
   if (profile.isObLabor) {
     return {
-      nd1Diagnosis: withPriorityPrompt('nd1Diagnosis', 'Risk for infection'),
+      nd1Diagnosis: 'Risk for infection',
       nd1Assessment: withPriorityPrompt('nd1Assessment', 'GBS positive; intrapartum antibiotics indicated.'),
       nd1Rationale: withPriorityPrompt('nd1Rationale', 'GBS colonization can increase newborn infection risk.'),
       nd1Intervention: 'Administer ordered IV antibiotics and monitor maternal/fetal status.',
       nd1Evaluation: 'No infection signs noted; continue prophylaxis.',
-      nd2Diagnosis: withPriorityPrompt('nd2Diagnosis', 'Acute pain'),
+      nd2Diagnosis: 'Acute pain',
       nd2Assessment: withPriorityPrompt('nd2Assessment', 'Contractions every 5-10 minutes in latent labor.'),
       nd2Rationale: withPriorityPrompt('nd2Rationale', 'Uterine contractions cause labor discomfort.'),
       nd2Intervention: 'Assess pain, support breathing/position changes, and reassess labor progress.',
       nd2Evaluation: 'Coping and pain response require reassessment.',
-      nd3Diagnosis: withPriorityPrompt('nd3Diagnosis', 'Deficient knowledge'),
+      nd3Diagnosis: 'Deficient knowledge',
       nd3Assessment: withPriorityPrompt('nd3Assessment', 'Needs teaching about GBS, fetal monitoring, and labor progress.'),
       nd3Rationale: withPriorityPrompt('nd3Rationale', 'Teaching supports informed participation in care.'),
       nd3Intervention: 'Explain GBS prophylaxis, normal FHR range, and when to report symptoms.',
@@ -989,15 +1044,20 @@ function buildSimulationPriorityFields(profile = {}) {
   return {};
 }
 
-function parseSimulationNotesText(rawText) {
+function parseSimulationNotesText(rawText, sourceHint = '') {
   const text = clean(normalizeSpacedPdfText(rawText));
-  const isPostpartumHemorrhage = /postpartum hemorrhage|hemorrhaging after giving birth|boggy uterus|quantitative blood loss|blood loss 800|fundus|retained placental|retained tissue|uterine atony|distended bladder|Fatime Sanogo/i.test(text);
-  const isObLabor = !isPostpartumHemorrhage && /primigravida|labor and delivery|fetal heart rate|\bfhr\b|gbs|dilation|effacement|station|intrapartum/i.test(text);
-  const isPreeclampsia = /preeclampsia|eclampsia|eclamptic seizure|magnesium sulfate|clonus|deep tendon reflex|seizure precautions|visual changes|protein in the urine/i.test(text);
+  const hintText = clean(normalizeSpacedPdfText(sourceHint));
+  const profileSource = clean(`${hintText} ${text}`);
+  const caseHint = extractVsimCaseNumber(hintText) || extractVsimCaseNumber(text.slice(0, 600));
+  const isPostpartumHemorrhage = caseHint === '5' || (!caseHint && /Fatime Sanogo|postpartum hemorrhage|hemorrhaging after giving birth|quantitative blood loss|\bqbl\s*800|blood loss 800|boggy uterus|uterine atony|retained placental|retained tissue/i.test(profileSource));
+  const isCordProlapse = caseHint === '4' || (!caseHint && !isPostpartumHemorrhage && /Carla Hernandez|prolapsed cord|cord prolapse|umbilical cord|visible at the vulva|variable decelerations|knee-chest|presenting fetal part/i.test(profileSource));
+  const isShoulderDystocia = caseHint === '3' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && /Amelia Sung|shoulder dystocia|McRoberts|suprapubic pressure|macrosomia|brachial plexus|Erb palsy|turtle sign/i.test(profileSource));
+  const isObLabor = caseHint === '2' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && /Brenda Patton|group b strep|gbs positive|penicillin g|intrapartum prophylaxis|primigravida[^.]+labor/i.test(profileSource));
+  const isPreeclampsia = caseHint === '1' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && !isObLabor && /Olivia Jones|severe preeclampsia|eclampsia|eclamptic seizure|magnesium sulfate|clonus|deep tendon reflex|seizure precautions|visual changes|protein in the urine/i.test(profileSource));
   const date = extractEncounterDate(text);
-  const clientName = extractSimulationClientName(text);
-  const age = extractAgeFromText(text) || (isPreeclampsia ? '23' : (isObLabor ? '18' : (isPostpartumHemorrhage ? '22' : '')));
-  const sex = extractSexFromText(text) || (isObLabor || isPreeclampsia || isPostpartumHemorrhage ? 'F' : '');
+  const clientName = extractSimulationClientName(text, sourceHint);
+  const age = extractAgeFromText(text) || (isPreeclampsia ? '23' : (isObLabor ? '18' : (isShoulderDystocia ? '36' : (isCordProlapse ? '32' : (isPostpartumHemorrhage ? '22' : '')))));
+  const sex = extractSexFromText(text) || (isObLabor || isPreeclampsia || isPostpartumHemorrhage || isShoulderDystocia || isCordProlapse ? 'F' : '');
   const ht = extractHeightFromText(text);
   const wt = extractWeightFromText(text);
   const vitals = extractVitalsFromSummary(text);
@@ -1055,8 +1115,10 @@ function parseSimulationNotesText(rawText) {
   const hasBloodLoss = /quantitative blood loss 800|blood loss 800|bp\s*90\/50|hr\s*120|tachycardia|hypotension|weak/i.test(text);
   const hasRetainedTissue = /retained tissue|retained placental|placental fragments/i.test(text);
   const hasBoggyUterus = /boggy uterus|uterine atony|uterine tone|fundus/i.test(text);
+  const hasShoulderManeuvers = /McRoberts|suprapubic pressure|step stool|newborn resuscitation/i.test(text);
+  const hasCordCompression = /variable decelerations|cord compression|prolapsed cord|umbilical cord/i.test(text);
   const laborFinding = clean(text.match(/(?:contractions every\s+[^.]+|vaginal exam(?:ination)?\s+(?:showing|of)?\s*[^.]+)/i)?.[0] || '');
-  const priorityFields = buildSimulationPriorityFields({ isObLabor, isPreeclampsia, isPostpartumHemorrhage });
+  const priorityFields = buildSimulationPriorityFields({ isObLabor, isPreeclampsia, isPostpartumHemorrhage, isShoulderDystocia, isCordProlapse });
 
   const fields = {
     ...DEFAULT_STATE,
@@ -1067,7 +1129,7 @@ function parseSimulationNotesText(rawText) {
     ht,
     wt,
     clientName,
-    diagnosis: isPostpartumHemorrhage ? 'Postpartum hemorrhage' : (isPreeclampsia ? 'Severe preeclampsia' : (isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text))),
+    diagnosis: isPostpartumHemorrhage ? 'Postpartum hemorrhage' : (isCordProlapse ? 'Umbilical cord prolapse' : (isShoulderDystocia ? 'Shoulder dystocia' : (isPreeclampsia ? 'Severe preeclampsia' : (isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text))))),
     allergy: '',
     allergies: '',
     immunizations: hasHepB ? 'Assess Hep B status' : '',
@@ -1083,6 +1145,20 @@ function parseSimulationNotesText(rawText) {
         hasBoggyUterus ? 'Boggy uterus/fundal concern' : '',
         hasRetainedTissue ? 'Retained tissue suspected' : '',
       ].filter(Boolean).join('; '), 115)
+      : (isCordProlapse
+      ? compactText([
+        '39 weeks gestation',
+        'Umbilical cord prolapse',
+        hasCordCompression ? 'cord compression/variable decelerations' : '',
+        'emergency cesarean preparation',
+      ].filter(Boolean).join('; '), 115)
+      : (isShoulderDystocia
+      ? compactText([
+        '40 weeks gestation',
+        'shoulder dystocia risk',
+        'macrosomia/large fetal size concern',
+        hasShoulderManeuvers ? 'McRoberts/suprapubic maneuvers' : '',
+      ].filter(Boolean).join('; '), 115)
       : (isObLabor
       ? compactText([
         'Primigravida in labor',
@@ -1090,11 +1166,11 @@ function parseSimulationNotesText(rawText) {
         hasHepB ? 'HBsAg positive' : '',
         hasUa ? 'UA glucose/ketones positive; no UTI indicators' : '',
       ].filter(Boolean).join('; '), 115)
-      : (isPreeclampsia ? 'Severe preeclampsia; seizure risk; CNS involvement signs reviewed.' : extractMedicalHistorySummary(text))),
+      : (isPreeclampsia ? 'Severe preeclampsia; seizure risk; CNS involvement signs reviewed.' : extractMedicalHistorySummary(text))))),
     surgicalHistory: 'None',
     supportSystem: 'Need to assess',
-    responseHospitalization: isPostpartumHemorrhage ? 'Postpartum hemorrhage management' : (isPreeclampsia ? 'Admitted for severe preeclampsia care' : (isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care')),
-    genAppearance: isPostpartumHemorrhage ? 'Postpartum; weak with bleeding concern' : (isPreeclampsia ? 'Pregnant patient; seizure precautions' : (isObLabor ? 'Laboring patient; no distress stated' : '')),
+    responseHospitalization: isPostpartumHemorrhage ? 'Postpartum hemorrhage management' : (isCordProlapse ? 'Emergency cord-prolapse care' : (isShoulderDystocia ? 'Emergency shoulder dystocia care' : (isPreeclampsia ? 'Admitted for severe preeclampsia care' : (isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care')))),
+    genAppearance: isPostpartumHemorrhage ? 'Postpartum; weak with bleeding concern' : (isCordProlapse ? 'Laboring patient; emergency care' : (isShoulderDystocia ? 'Laboring patient; dystocia emergency' : (isPreeclampsia ? 'Pregnant patient; seizure precautions' : (isObLabor ? 'Laboring patient; no distress stated' : '')))),
     ivLocation: meds.length ? 'Need to assess IV site' : '',
     surgicalIncision: 'None',
     orientation: 'A&O x4',
@@ -1105,33 +1181,44 @@ function parseSimulationNotesText(rawText) {
     peripheralPulses: 'Present',
     edema: 'Need to assess',
     bowelSounds: 'Present',
-    physicalOther: isPostpartumHemorrhage ? 'Boggy uterus; distended bladder' : (isPreeclampsia ? 'Seizure precautions; assess DTR/clonus' : (laborFinding || (isObLabor ? 'First stage, latent phase' : ''))),
+    physicalOther: isPostpartumHemorrhage ? 'Boggy uterus; distended bladder' : (isCordProlapse ? 'Cord prolapse; elevate presenting part' : (isShoulderDystocia ? 'Shoulder dystocia; McRoberts' : (isPreeclampsia ? 'Seizure precautions; assess DTR/clonus' : (laborFinding || (isObLabor ? 'First stage, latent phase' : ''))))),
     temp: vitals.temp || (isPostpartumHemorrhage ? '97.7 F' : '98.6 F'),
     pulse: vitals.pulse || (isPostpartumHemorrhage ? '120 bpm' : (isPreeclampsia ? '92 bpm' : '88 bpm')),
     resp: vitals.resp || '18/min',
     bp: vitals.bp || (isPostpartumHemorrhage ? '90/50' : (isPreeclampsia ? '160/100' : '118/72')),
-    pain: painScore || (isPostpartumHemorrhage ? 'Assess pain' : (isPreeclampsia ? 'Headache; assess pain' : (isObLabor ? 'Contraction discomfort' : ''))),
+    pain: painScore || (isShoulderDystocia ? 'Labor pain; assess' : (isCordProlapse ? 'Assess pain/anxiety' : (isPostpartumHemorrhage ? 'Assess pain' : (isPreeclampsia ? 'Headache; assess pain' : (isObLabor ? 'Contraction discomfort' : ''))))),
     vitals: '',
     psychosocial: isPostpartumHemorrhage
       ? compactText('Postpartum hemorrhage may cause fear/anxiety; provide calm updates and support person involvement.', 220)
+      : (isCordProlapse
+      ? compactText('Cord prolapse requires emergency cesarean preparation; provide brief reassurance and updates.', 220)
+      : (isShoulderDystocia
+      ? compactText('Shoulder dystocia emergency may increase anxiety; maintain clear team communication and support.', 220)
       : (isPreeclampsia
       ? compactText('Hospital admission for severe preeclampsia; support anxiety reduction with quiet environment and teaching.', 220)
       : (isObLabor
       ? compactText('Admitted to labor and delivery; assess coping, support person, teaching needs, and labor anxiety.', 220)
-      : cleanClinicalValue(text, 220))),
+        : cleanClinicalValue(text, 220))))),
     cultural: '',
     spiritualAssessment: 'No needs stated',
     educationNeeds: isPostpartumHemorrhage
       ? 'Teach bleeding warning signs, fundal checks, medication purpose, and call-for-help precautions.'
+      : (isCordProlapse
+      ? 'Explain emergency positioning, fetal monitoring, cesarean preparation, and call-for-help steps.'
+      : (isShoulderDystocia
+      ? 'Explain shoulder dystocia actions, newborn assessment, pain control, and emergency team roles.'
       : (isPreeclampsia
       ? 'Teach seizure precautions, magnesium therapy, warning signs, BP monitoring, and when to call for help.'
       : (isObLabor
       ? 'Teach labor progress, fetal monitoring, GBS prophylaxis, Hep B precautions, and when to report changes.'
-      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text))),
-    safety: isPostpartumHemorrhage ? 'Hemorrhage precautions; assist ambulation; monitor perfusion.' : (isPreeclampsia ? 'Seizure precautions; quiet/dim environment; lateral positioning.' : (isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : '')),
+      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text))))),
+    safety: isPostpartumHemorrhage ? 'Hemorrhage precautions; assist ambulation; monitor perfusion.' : (isCordProlapse ? 'Emergency OR preparation; fetal monitoring.' : (isShoulderDystocia ? 'Call for help; avoid fundal pressure.' : (isPreeclampsia ? 'Seizure precautions; quiet/dim environment; lateral positioning.' : (isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : '')))),
     diagnosticTests: compactText([
       isPostpartumHemorrhage ? 'Quantitative blood loss' : '',
       isPostpartumHemorrhage ? 'CBC/type and crossmatch' : '',
+      isCordProlapse ? 'Fetal monitoring' : '',
+      isCordProlapse ? 'CBC/type-cross/pre-op labs' : '',
+      isShoulderDystocia ? 'FHR/Apgar/newborn assessment' : '',
       hasUa ? 'Urinalysis' : '',
       hasHepB ? 'Hepatitis B surface antigen' : '',
       hasGbs ? 'GBS culture' : '',
@@ -1141,28 +1228,36 @@ function parseSimulationNotesText(rawText) {
     ].filter(Boolean).join('; '), 120),
     labs: compactText([
       isPostpartumHemorrhage ? 'QBL 800 mL; BP 90/50; HR 120; monitor Hgb/Hct/platelets/type-cross.' : '',
+      isCordProlapse ? 'Variable decelerations/cord compression; review CBC/type-cross/UA.' : '',
+      isShoulderDystocia ? 'Estimated fetal weight >=4000 g; document delivery times and newborn status.' : '',
       hasUa ? 'UA negative WBC/RBC/leukocyte esterase/nitrates; glucose and ketones positive.' : '',
       hasHepB ? 'HBsAg positive.' : '',
       hasGbs ? 'GBS positive.' : '',
       hasMagLevel ? 'Magnesium therapeutic range 4-7 mEq/L.' : '',
       hasCnsSigns ? 'CNS signs include hyperreflexia/headache/visual changes.' : '',
     ].filter(Boolean).join(' '), 140),
-    labTestName: isPostpartumHemorrhage ? 'QBL / CBC / type-cross' : (isPreeclampsia ? 'BP / urine protein / Mg' : (hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : '')),
+    labTestName: isPostpartumHemorrhage ? 'QBL / CBC / type-cross' : (isCordProlapse ? 'FHR / CBC / type-cross' : (isShoulderDystocia ? 'EFW / FHR / Apgar' : (isPreeclampsia ? 'BP / urine protein / Mg' : (hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : '')))),
     labClientResults: compactText([
       isPostpartumHemorrhage ? 'QBL 800 mL; BP 90/50; HR 120; weak' : '',
+      isCordProlapse ? 'Cord prolapse/variable decels; prep C-section' : '',
+      isShoulderDystocia ? 'EFW >=4000 g; shoulder dystocia maneuvers' : '',
       isPreeclampsia ? 'Severe preeclampsia; assess proteinuria/CNS signs' : '',
       hasUa ? 'UA glucose/ketones positive; WBC/RBC/nitrates negative' : '',
       hasHepB ? 'HBsAg positive' : '',
       hasGbs ? 'GBS positive' : '',
     ].filter(Boolean).join('; '), 55),
-    labNormalValue: isPostpartumHemorrhage ? 'QBL <500 mL vaginal; stable VS' : (isPreeclampsia ? 'BP <140/90; no proteinuria; Mg 4-7' : 'UA negative; HBsAg negative; GBS negative'),
+    labNormalValue: isPostpartumHemorrhage ? 'QBL <500 mL vaginal; stable VS' : (isCordProlapse ? 'Reassuring FHR; intact cord position' : (isShoulderDystocia ? 'Uncomplicated delivery; reassuring newborn' : (isPreeclampsia ? 'BP <140/90; no proteinuria; Mg 4-7' : 'UA negative; HBsAg negative; GBS negative'))),
     labInterpretation: isPostpartumHemorrhage
       ? 'Findings support postpartum hemorrhage; monitor shock/perfusion.'
+      : (isCordProlapse
+      ? 'Cord prolapse threatens fetal oxygenation; urgent delivery needed.'
+      : (isShoulderDystocia
+      ? 'Shoulder dystocia increases fetal compromise/birth injury risk.'
       : (isPreeclampsia
       ? 'Findings support severe preeclampsia; monitor seizure risk and perfusion.'
       : (hasGbs
-      ? 'GBS requires intrapartum antibiotic prophylaxis; monitor maternal/fetal status.'
-      : 'Review abnormal results with care team.')),
+        ? 'GBS requires intrapartum antibiotic prophylaxis; monitor maternal/fetal status.'
+        : 'Review abnormal results with care team.')))),
     currentMedDate: date,
     currentMedOrder: isPostpartumHemorrhage ? buildMedicationOrderSummary(ensurePopulatedMeds(meds), 165) : (isPreeclampsia ? 'Magnesium sulfate IV per protocol' : (meds.length ? 'Penicillin G IV per labor protocol' : '')),
     currentMedIndication: isPostpartumHemorrhage ? 'PPH bleeding/uterine tone management' : (isPreeclampsia ? 'Seizure prophylaxis' : (meds.length ? 'GBS intrapartum prophylaxis' : '')),
@@ -3464,6 +3559,20 @@ function sanitizeParsedFields(fields = {}, sourceText = '') {
   };
 }
 
+function sanitizeSimulationParsedFields(fields = {}) {
+  return {
+    ...fields,
+    date: clean(fields.date),
+    age: clean(fields.age),
+    patientInitialAge: clean(fields.patientInitialAge),
+    sex: clean(fields.sex),
+    diagnosis: cleanClinicalValue(fields.diagnosis, 40),
+    medicalHistory: cleanClinicalValue(fields.medicalHistory, 140),
+    psychosocial: cleanClinicalValue(fields.psychosocial, 220),
+    genAppearance: cleanClinicalValue(fields.genAppearance, 140),
+  };
+}
+
 function mergeNewCaseFields(prev = {}, parsedFields = {}) {
   return {
     ...DEFAULT_STATE,
@@ -3600,6 +3709,7 @@ export default function App() {
   const [medications, setMedications] = useState(MED_DEFAULT);
   const [rawText, setRawText] = useState('');
   const [simulationNotesText, setSimulationNotesText] = useState('');
+  const [simulationFileName, setSimulationFileName] = useState('');
   const [simulationParsed, setSimulationParsed] = useState(false);
   const [simulationStatus, setSimulationStatus] = useState('Load a simulation PDF, then parse it into the concept map.');
   const [loading, setLoading] = useState(false);
@@ -3803,9 +3913,9 @@ export default function App() {
     );
   };
 
-  const applySimulationNotesText = (text) => {
-    const parsed = parseSimulationNotesText(text);
-    const sanitizedFields = sanitizeParsedFields(parsed.fields, parsed.rawText);
+  const applySimulationNotesText = (text, sourceHint = '') => {
+    const parsed = parseSimulationNotesText(text, sourceHint);
+    const sanitizedFields = sanitizeSimulationParsedFields(parsed.fields);
     const bestMatchedFields = ensureConceptMapFields(sanitizedFields, parsed.rawText, parsed.medications);
     setFields((prev) => mergeNewCaseFields(prev, bestMatchedFields));
     setMedications(ensurePopulatedMeds(parsed.medications));
@@ -3823,6 +3933,7 @@ export default function App() {
     if (!file) return;
     setLoading(true);
     setProgress(5, 'Preparing simulation PDF extraction...');
+    setSimulationFileName(file.name || '');
     setSimulationParsed(false);
     setSimulationStatus('Extracting simulation notes from PDF...');
     setStatus('Extracting simulation PDF text...');
@@ -3844,6 +3955,7 @@ export default function App() {
 
   const clearSimulationBeta = () => {
     setSimulationNotesText('');
+    setSimulationFileName('');
     setSimulationParsed(false);
     setSimulationStatus('Load a simulation PDF, then parse it into the concept map.');
     setFields((prev) => clearPriorityNursingFields({
@@ -4589,8 +4701,11 @@ export default function App() {
       'Impaired urinary elimination',
       'Risk for maternal injury',
       'Risk for infection',
+      'Risk for birth injury',
       'Acute pain',
+      'Anxiety',
       'Deficient knowledge',
+      'Impaired fetal gas exchange',
       'Impaired physical mobility',
       'Activity intolerance',
       'Risk for falls',
@@ -4598,7 +4713,7 @@ export default function App() {
       'Fatigue',
       'Decreased cardiac output',
       'Impaired skin integrity',
-    ].map((option) => withPriorityPrompt(key, option));
+    ];
     const selectOptionsByKey = {
       orientation: ['A&O x4', 'A&O x3', 'A&O x2', 'A&O x1', 'Alert, confused', 'Lethargic', 'Unable to assess'],
       skinTurgor: ['Normal', 'Decreased', 'Poor', 'Unable to assess'],
@@ -4987,7 +5102,7 @@ export default function App() {
                   <button className="btn test-action" onClick={clearSimulationBeta} disabled={loading || aiLoading}>
                     Clear
                   </button>
-                  <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
+                  <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText, simulationFileName)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
                     <Wand2 size={16} />Parse Simulation PDF
                   </button>
                   <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={!simulationParsed || loading || !templateReady}>
@@ -5018,6 +5133,7 @@ export default function App() {
                     value={simulationNotesText}
                     onChange={(e) => {
                       setSimulationNotesText(e.target.value);
+                      setSimulationFileName('');
                       setSimulationParsed(false);
                       setSimulationStatus('Simulation notes changed. Parse again before downloading the beta PDF.');
                     }}
