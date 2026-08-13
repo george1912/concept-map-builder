@@ -234,7 +234,7 @@ function extractAgeFromText(text = '') {
   const patterns = [
     /\bAge\s*:\s*(\d{1,3})\s*years?\b/i,
     /\b(?:patient|client)\s+is\s+(?:an?\s+)?(\d{1,3})\s*[- ]?\s*year[- ]?old\b/i,
-    /\b(\d{1,3})\s*[- ]?\s*year[- ]?old\s+(?:male|female|man|woman|patient|client)\b/i,
+    /\b(\d{1,3})\s*[- ]?\s*year[- ]?old\s+(?:male|female|man|woman|patient|client|person|pregnant\s+person)\b/i,
     /\bAge\s*[:=-]\s*(\d{1,3})\b/i,
   ];
   for (const pattern of patterns) {
@@ -914,7 +914,7 @@ function parseCaseText(rawText) {
 }
 
 function extractVsimCaseNumber(value = '') {
-  return clean(normalizeSpacedPdfText(value)).match(/\bv[\s-]*sim[\s-]*(?:case[\s-]*)?([1-5])\b/i)?.[1] || '';
+  return clean(normalizeSpacedPdfText(value)).match(/\bv[\s-]*sim[\s-]*(?:case[\s-]*)?([1-6])\b/i)?.[1] || '';
 }
 
 function extractSimulationClientName(text = '', sourceHint = '') {
@@ -925,6 +925,7 @@ function extractSimulationClientName(text = '', sourceHint = '') {
   if (caseHint === '3') return 'Amelia Sung';
   if (caseHint === '4') return 'Carla Hernandez';
   if (caseHint === '5') return 'Fatime Sanogo';
+  if (caseHint === '6') return 'Ariel Barkley';
   const explicit = source.match(/\b(?:Patient|Client)\s+Name\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})/i)?.[1]
     || source.match(/\bName\s*[:=-]\s*([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,2})/i)?.[1];
   if (explicit) return clean(explicit);
@@ -933,10 +934,12 @@ function extractSimulationClientName(text = '', sourceHint = '') {
   if (/Amelia\s+Sung/i.test(source)) return 'Amelia Sung';
   if (/Olivia\s+Jones/i.test(source)) return 'Olivia Jones';
   if (/Brenda\s+Patton/i.test(source) && !/Fatime\s+Sanogo/i.test(source)) return 'Brenda Patton';
+  if (/Ariel\s+Barkley/i.test(source)) return 'Ariel Barkley';
   if (/vsim\s*3\b|shoulder dystocia|mcroberts|suprapubic pressure/i.test(source)) return 'Amelia Sung';
   if (/vsim\s*4\b|prolapsed cord|cord prolapse|umbilical cord/i.test(source)) return 'Carla Hernandez';
   if (/vsim\s+case\s*1\b|severe\s+preeclampsia|eclamptic seizure|magnesium sulfate/i.test(source)) return 'Olivia Jones';
   if (/vsim\s+case\s*2\b|gbs|group b strep|penicillin g|latent phase/i.test(source)) return 'Brenda Patton';
+  if (/vsim\s*6\b|Ariel Barkley|recurrent variable fetal heart rate decelerations|Apgar score/i.test(source)) return 'Ariel Barkley';
   return '';
 }
 
@@ -1001,6 +1004,26 @@ function buildSimulationPriorityFields(profile = {}) {
     };
   }
 
+  if (profile.isTermDelivery) {
+    return {
+      nd1Diagnosis: 'Impaired fetal gas exchange',
+      nd1Assessment: withPriorityPrompt('nd1Assessment', 'Recurrent variable FHR decelerations during pushing.'),
+      nd1Rationale: withPriorityPrompt('nd1Rationale', 'Variable decelerations suggest cord compression and reduced fetal oxygenation.'),
+      nd1Intervention: 'Reposition lateral, give oxygen/IV fluids, modify pushing, notify provider, and monitor FHR.',
+      nd1Evaluation: 'FHR response and newborn status require reassessment.',
+      nd2Diagnosis: 'Acute pain',
+      nd2Assessment: withPriorityPrompt('nd2Assessment', 'Active labor, pushing, and perineal care needs.'),
+      nd2Rationale: withPriorityPrompt('nd2Rationale', 'Labor and perineal tissue changes can increase pain.'),
+      nd2Intervention: 'Assess pain, support nonpharmacologic coping, provide perineal care, and reassess comfort.',
+      nd2Evaluation: 'Patient comfort and coping require continued reassessment.',
+      nd3Diagnosis: 'Deficient knowledge',
+      nd3Assessment: withPriorityPrompt('nd3Assessment', 'Patient asks about Apgar, delayed cord clamping, and postpartum care.'),
+      nd3Rationale: withPriorityPrompt('nd3Rationale', 'Teaching supports safe newborn and postpartum recovery.'),
+      nd3Intervention: 'Teach Apgar meaning, cord clamping, bleeding checks, first ambulation safety, and warning signs.',
+      nd3Evaluation: 'Patient verbalizes postpartum and newborn care teaching.',
+    };
+  }
+
   if (profile.isPreeclampsia) {
     return {
       nd1Diagnosis: 'Risk for maternal injury',
@@ -1052,12 +1075,13 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
   const isPostpartumHemorrhage = caseHint === '5' || (!caseHint && /Fatime Sanogo|postpartum hemorrhage|hemorrhaging after giving birth|quantitative blood loss|\bqbl\s*800|blood loss 800|boggy uterus|uterine atony|retained placental|retained tissue/i.test(profileSource));
   const isCordProlapse = caseHint === '4' || (!caseHint && !isPostpartumHemorrhage && /Carla Hernandez|prolapsed cord|cord prolapse|umbilical cord|visible at the vulva|variable decelerations|knee-chest|presenting fetal part/i.test(profileSource));
   const isShoulderDystocia = caseHint === '3' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && /Amelia Sung|shoulder dystocia|McRoberts|suprapubic pressure|macrosomia|brachial plexus|Erb palsy|turtle sign/i.test(profileSource));
-  const isObLabor = caseHint === '2' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && /Brenda Patton|group b strep|gbs positive|penicillin g|intrapartum prophylaxis|primigravida[^.]+labor/i.test(profileSource));
-  const isPreeclampsia = caseHint === '1' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && !isObLabor && /Olivia Jones|severe preeclampsia|eclampsia|eclamptic seizure|magnesium sulfate|clonus|deep tendon reflex|seizure precautions|visual changes|protein in the urine/i.test(profileSource));
+  const isTermDelivery = caseHint === '6' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && /Ariel Barkley|recurrent variable fetal heart rate decelerations|Apgar score|delayed cord clamping|postpartum period/i.test(profileSource));
+  const isObLabor = caseHint === '2' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && !isTermDelivery && /Brenda Patton|group b strep|gbs positive|penicillin g|intrapartum prophylaxis|primigravida[^.]+labor/i.test(profileSource));
+  const isPreeclampsia = caseHint === '1' || (!caseHint && !isPostpartumHemorrhage && !isCordProlapse && !isShoulderDystocia && !isTermDelivery && !isObLabor && /Olivia Jones|severe preeclampsia|eclampsia|eclamptic seizure|magnesium sulfate|clonus|deep tendon reflex|seizure precautions|visual changes|protein in the urine/i.test(profileSource));
   const date = extractEncounterDate(text);
   const clientName = extractSimulationClientName(text, sourceHint);
-  const age = extractAgeFromText(text) || (isPreeclampsia ? '23' : (isObLabor ? '18' : (isShoulderDystocia ? '36' : (isCordProlapse ? '32' : (isPostpartumHemorrhage ? '22' : '')))));
-  const sex = extractSexFromText(text) || (isObLabor || isPreeclampsia || isPostpartumHemorrhage || isShoulderDystocia || isCordProlapse ? 'F' : '');
+  const age = extractAgeFromText(text) || (isPreeclampsia ? '23' : (isObLabor ? '18' : (isShoulderDystocia ? '36' : (isCordProlapse ? '32' : (isPostpartumHemorrhage ? '22' : (isTermDelivery ? '16' : ''))))));
+  const sex = extractSexFromText(text) || (isObLabor || isPreeclampsia || isPostpartumHemorrhage || isShoulderDystocia || isCordProlapse || isTermDelivery ? 'F' : '');
   const ht = extractHeightFromText(text);
   const wt = extractWeightFromText(text);
   const vitals = extractVitalsFromSummary(text);
@@ -1106,6 +1130,16 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
       });
     }
   }
+  if (isTermDelivery && /oxytocin/i.test(text)) {
+    meds.push({
+      nameClass: 'Oxytocin',
+      doseRoute: 'IV postpartum if ordered',
+      why: 'Postpartum hemorrhage prophylaxis',
+      action: '',
+      implications: '',
+      sideEffects: '',
+    });
+  }
 
   const hasUa = /urinalysis|white blood cell|wbc|red blood cell|rbc|leuko|nitrate|glucose|ketone/i.test(text);
   const hasHepB = /hepatitis\s*b|hbsag|surface antigen/i.test(text);
@@ -1118,7 +1152,7 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
   const hasShoulderManeuvers = /McRoberts|suprapubic pressure|step stool|newborn resuscitation/i.test(text);
   const hasCordCompression = /variable decelerations|cord compression|prolapsed cord|umbilical cord/i.test(text);
   const laborFinding = clean(text.match(/(?:contractions every\s+[^.]+|vaginal exam(?:ination)?\s+(?:showing|of)?\s*[^.]+)/i)?.[0] || '');
-  const priorityFields = buildSimulationPriorityFields({ isObLabor, isPreeclampsia, isPostpartumHemorrhage, isShoulderDystocia, isCordProlapse });
+  const priorityFields = buildSimulationPriorityFields({ isObLabor, isPreeclampsia, isPostpartumHemorrhage, isShoulderDystocia, isCordProlapse, isTermDelivery });
 
   const fields = {
     ...DEFAULT_STATE,
@@ -1129,7 +1163,7 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
     ht,
     wt,
     clientName,
-    diagnosis: isPostpartumHemorrhage ? 'Postpartum hemorrhage' : (isCordProlapse ? 'Umbilical cord prolapse' : (isShoulderDystocia ? 'Shoulder dystocia' : (isPreeclampsia ? 'Severe preeclampsia' : (isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text))))),
+    diagnosis: isPostpartumHemorrhage ? 'Postpartum hemorrhage' : (isCordProlapse ? 'Umbilical cord prolapse' : (isShoulderDystocia ? 'Shoulder dystocia' : (isTermDelivery ? 'Term delivery; variable decelerations' : (isPreeclampsia ? 'Severe preeclampsia' : (isObLabor ? 'Latent labor; GBS positive' : extractSimpleDiagnosis('', text)))))),
     allergy: '',
     allergies: '',
     immunizations: hasHepB ? 'Assess Hep B status' : '',
@@ -1159,6 +1193,13 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
         'macrosomia/large fetal size concern',
         hasShoulderManeuvers ? 'McRoberts/suprapubic maneuvers' : '',
       ].filter(Boolean).join('; '), 115)
+      : (isTermDelivery
+      ? compactText([
+        '16-year-old G1P0 at 39 weeks',
+        '10 cm dilated and pushing',
+        hasCordCompression ? 'recurrent variable FHR decelerations' : '',
+        /Apgar/i.test(text) ? 'newborn Apgar 9/10' : '',
+      ].filter(Boolean).join('; '), 115)
       : (isObLabor
       ? compactText([
         'Primigravida in labor',
@@ -1166,11 +1207,11 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
         hasHepB ? 'HBsAg positive' : '',
         hasUa ? 'UA glucose/ketones positive; no UTI indicators' : '',
       ].filter(Boolean).join('; '), 115)
-      : (isPreeclampsia ? 'Severe preeclampsia; seizure risk; CNS involvement signs reviewed.' : extractMedicalHistorySummary(text))))),
+      : (isPreeclampsia ? 'Severe preeclampsia; seizure risk; CNS involvement signs reviewed.' : extractMedicalHistorySummary(text)))))),
     surgicalHistory: 'None',
     supportSystem: 'Need to assess',
-    responseHospitalization: isPostpartumHemorrhage ? 'Postpartum hemorrhage management' : (isCordProlapse ? 'Emergency cord-prolapse care' : (isShoulderDystocia ? 'Emergency shoulder dystocia care' : (isPreeclampsia ? 'Admitted for severe preeclampsia care' : (isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care')))),
-    genAppearance: isPostpartumHemorrhage ? 'Postpartum; weak with bleeding concern' : (isCordProlapse ? 'Laboring patient; emergency care' : (isShoulderDystocia ? 'Laboring patient; dystocia emergency' : (isPreeclampsia ? 'Pregnant patient; seizure precautions' : (isObLabor ? 'Laboring patient; no distress stated' : '')))),
+    responseHospitalization: isPostpartumHemorrhage ? 'Postpartum hemorrhage management' : (isCordProlapse ? 'Emergency cord-prolapse care' : (isShoulderDystocia ? 'Emergency shoulder dystocia care' : (isTermDelivery ? 'Labor/postpartum teaching and monitoring' : (isPreeclampsia ? 'Admitted for severe preeclampsia care' : (isObLabor ? 'Admitted to labor and delivery' : 'Cooperative with care'))))),
+    genAppearance: isPostpartumHemorrhage ? 'Postpartum; weak with bleeding concern' : (isCordProlapse ? 'Laboring patient; emergency care' : (isShoulderDystocia ? 'Laboring patient; dystocia emergency' : (isTermDelivery ? 'Laboring/postpartum patient' : (isPreeclampsia ? 'Pregnant patient; seizure precautions' : (isObLabor ? 'Laboring patient; no distress stated' : ''))))),
     ivLocation: meds.length ? 'Need to assess IV site' : '',
     surgicalIncision: 'None',
     orientation: 'A&O x4',
@@ -1181,12 +1222,12 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
     peripheralPulses: 'Present',
     edema: 'Need to assess',
     bowelSounds: 'Present',
-    physicalOther: isPostpartumHemorrhage ? 'Boggy uterus; distended bladder' : (isCordProlapse ? 'Cord prolapse; elevate presenting part' : (isShoulderDystocia ? 'Shoulder dystocia; McRoberts' : (isPreeclampsia ? 'Seizure precautions; assess DTR/clonus' : (laborFinding || (isObLabor ? 'First stage, latent phase' : ''))))),
-    temp: vitals.temp || (isPostpartumHemorrhage ? '97.7 F' : '98.6 F'),
-    pulse: vitals.pulse || (isPostpartumHemorrhage ? '120 bpm' : (isPreeclampsia ? '92 bpm' : '88 bpm')),
-    resp: vitals.resp || '18/min',
-    bp: vitals.bp || (isPostpartumHemorrhage ? '90/50' : (isPreeclampsia ? '160/100' : '118/72')),
-    pain: painScore || (isShoulderDystocia ? 'Labor pain; assess' : (isCordProlapse ? 'Assess pain/anxiety' : (isPostpartumHemorrhage ? 'Assess pain' : (isPreeclampsia ? 'Headache; assess pain' : (isObLabor ? 'Contraction discomfort' : ''))))),
+    physicalOther: isPostpartumHemorrhage ? 'Boggy uterus; distended bladder' : (isCordProlapse ? 'Cord prolapse; elevate presenting part' : (isShoulderDystocia ? 'Shoulder dystocia; McRoberts' : (isTermDelivery ? 'Variable decels; Apgar 9/10' : (isPreeclampsia ? 'Seizure precautions; assess DTR/clonus' : (laborFinding || (isObLabor ? 'First stage, latent phase' : '')))))),
+    temp: vitals.temp || (isTermDelivery ? 'Need to assess' : (isPostpartumHemorrhage ? '97.7 F' : '98.6 F')),
+    pulse: vitals.pulse || (isTermDelivery ? 'Need to assess' : (isPostpartumHemorrhage ? '120 bpm' : (isPreeclampsia ? '92 bpm' : '88 bpm'))),
+    resp: vitals.resp || (isTermDelivery ? 'Need to assess' : '18/min'),
+    bp: vitals.bp || (isTermDelivery ? 'Need to assess' : (isPostpartumHemorrhage ? '90/50' : (isPreeclampsia ? '160/100' : '118/72'))),
+    pain: painScore || (isShoulderDystocia ? 'Labor pain; assess' : (isCordProlapse ? 'Assess pain/anxiety' : (isTermDelivery ? 'Labor/postpartum pain; assess' : (isPostpartumHemorrhage ? 'Assess pain' : (isPreeclampsia ? 'Headache; assess pain' : (isObLabor ? 'Contraction discomfort' : '')))))),
     vitals: '',
     psychosocial: isPostpartumHemorrhage
       ? compactText('Postpartum hemorrhage may cause fear/anxiety; provide calm updates and support person involvement.', 220)
@@ -1194,11 +1235,13 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
       ? compactText('Cord prolapse requires emergency cesarean preparation; provide brief reassurance and updates.', 220)
       : (isShoulderDystocia
       ? compactText('Shoulder dystocia emergency may increase anxiety; maintain clear team communication and support.', 220)
+      : (isTermDelivery
+      ? compactText('Young first-time birthing patient; assess support person involvement, coping, postpartum learning needs, and newborn teaching.', 220)
       : (isPreeclampsia
       ? compactText('Hospital admission for severe preeclampsia; support anxiety reduction with quiet environment and teaching.', 220)
       : (isObLabor
       ? compactText('Admitted to labor and delivery; assess coping, support person, teaching needs, and labor anxiety.', 220)
-        : cleanClinicalValue(text, 220))))),
+        : cleanClinicalValue(text, 220)))))),
     cultural: '',
     spiritualAssessment: 'No needs stated',
     educationNeeds: isPostpartumHemorrhage
@@ -1207,18 +1250,23 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
       ? 'Explain emergency positioning, fetal monitoring, cesarean preparation, and call-for-help steps.'
       : (isShoulderDystocia
       ? 'Explain shoulder dystocia actions, newborn assessment, pain control, and emergency team roles.'
+      : (isTermDelivery
+      ? 'Teach Apgar score, delayed cord clamping, bleeding checks, first ambulation safety, and postpartum warning signs.'
       : (isPreeclampsia
       ? 'Teach seizure precautions, magnesium therapy, warning signs, BP monitoring, and when to call for help.'
       : (isObLabor
       ? 'Teach labor progress, fetal monitoring, GBS prophylaxis, Hep B precautions, and when to report changes.'
-      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text))))),
-    safety: isPostpartumHemorrhage ? 'Hemorrhage precautions; assist ambulation; monitor perfusion.' : (isCordProlapse ? 'Emergency OR preparation; fetal monitoring.' : (isShoulderDystocia ? 'Call for help; avoid fundal pressure.' : (isPreeclampsia ? 'Seizure precautions; quiet/dim environment; lateral positioning.' : (isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : '')))),
+      : buildEducationalNeedsSuggestion(DEFAULT_STATE, text)))))),
+    safety: isPostpartumHemorrhage ? 'Hemorrhage precautions; assist ambulation; monitor perfusion.' : (isCordProlapse ? 'Emergency OR preparation; fetal monitoring.' : (isShoulderDystocia ? 'Call for help; avoid fundal pressure.' : (isTermDelivery ? 'Monitor FHR; assist first ambulation postpartum.' : (isPreeclampsia ? 'Seizure precautions; quiet/dim environment; lateral positioning.' : (isObLabor ? 'Maintain maternal/fetal monitoring and infection precautions as ordered.' : ''))))),
     diagnosticTests: compactText([
       isPostpartumHemorrhage ? 'Quantitative blood loss' : '',
       isPostpartumHemorrhage ? 'CBC/type and crossmatch' : '',
       isCordProlapse ? 'Fetal monitoring' : '',
       isCordProlapse ? 'CBC/type-cross/pre-op labs' : '',
       isShoulderDystocia ? 'FHR/Apgar/newborn assessment' : '',
+      isTermDelivery ? 'FHR monitoring' : '',
+      isTermDelivery ? 'Apgar/newborn assessment' : '',
+      isTermDelivery ? 'Prenatal serologies/CBC' : '',
       hasUa ? 'Urinalysis' : '',
       hasHepB ? 'Hepatitis B surface antigen' : '',
       hasGbs ? 'GBS culture' : '',
@@ -1230,37 +1278,41 @@ function parseSimulationNotesText(rawText, sourceHint = '') {
       isPostpartumHemorrhage ? 'QBL 800 mL; BP 90/50; HR 120; monitor Hgb/Hct/platelets/type-cross.' : '',
       isCordProlapse ? 'Variable decelerations/cord compression; review CBC/type-cross/UA.' : '',
       isShoulderDystocia ? 'Estimated fetal weight >=4000 g; document delivery times and newborn status.' : '',
+      isTermDelivery ? 'Recurrent variable FHR decels; 5-min Apgar 9/10; review prenatal serologies/CBC.' : '',
       hasUa ? 'UA negative WBC/RBC/leukocyte esterase/nitrates; glucose and ketones positive.' : '',
       hasHepB ? 'HBsAg positive.' : '',
       hasGbs ? 'GBS positive.' : '',
       hasMagLevel ? 'Magnesium therapeutic range 4-7 mEq/L.' : '',
       hasCnsSigns ? 'CNS signs include hyperreflexia/headache/visual changes.' : '',
     ].filter(Boolean).join(' '), 140),
-    labTestName: isPostpartumHemorrhage ? 'QBL / CBC / type-cross' : (isCordProlapse ? 'FHR / CBC / type-cross' : (isShoulderDystocia ? 'EFW / FHR / Apgar' : (isPreeclampsia ? 'BP / urine protein / Mg' : (hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : '')))),
+    labTestName: isPostpartumHemorrhage ? 'QBL / CBC / type-cross' : (isCordProlapse ? 'FHR / CBC / type-cross' : (isShoulderDystocia ? 'EFW / FHR / Apgar' : (isTermDelivery ? 'FHR / Apgar / prenatal labs' : (isPreeclampsia ? 'BP / urine protein / Mg' : (hasUa || hasHepB || hasGbs ? 'UA / HBsAg / GBS' : ''))))),
     labClientResults: compactText([
       isPostpartumHemorrhage ? 'QBL 800 mL; BP 90/50; HR 120; weak' : '',
       isCordProlapse ? 'Cord prolapse/variable decels; prep C-section' : '',
       isShoulderDystocia ? 'EFW >=4000 g; shoulder dystocia maneuvers' : '',
+      isTermDelivery ? 'Variable FHR decels; Apgar 9/10' : '',
       isPreeclampsia ? 'Severe preeclampsia; assess proteinuria/CNS signs' : '',
       hasUa ? 'UA glucose/ketones positive; WBC/RBC/nitrates negative' : '',
       hasHepB ? 'HBsAg positive' : '',
       hasGbs ? 'GBS positive' : '',
     ].filter(Boolean).join('; '), 55),
-    labNormalValue: isPostpartumHemorrhage ? 'QBL <500 mL vaginal; stable VS' : (isCordProlapse ? 'Reassuring FHR; intact cord position' : (isShoulderDystocia ? 'Uncomplicated delivery; reassuring newborn' : (isPreeclampsia ? 'BP <140/90; no proteinuria; Mg 4-7' : 'UA negative; HBsAg negative; GBS negative'))),
+    labNormalValue: isPostpartumHemorrhage ? 'QBL <500 mL vaginal; stable VS' : (isCordProlapse ? 'Reassuring FHR; intact cord position' : (isShoulderDystocia ? 'Uncomplicated delivery; reassuring newborn' : (isTermDelivery ? 'FHR 110-160; Apgar 7-10' : (isPreeclampsia ? 'BP <140/90; no proteinuria; Mg 4-7' : 'UA negative; HBsAg negative; GBS negative')))),
     labInterpretation: isPostpartumHemorrhage
       ? 'Findings support postpartum hemorrhage; monitor shock/perfusion.'
       : (isCordProlapse
       ? 'Cord prolapse threatens fetal oxygenation; urgent delivery needed.'
       : (isShoulderDystocia
       ? 'Shoulder dystocia increases fetal compromise/birth injury risk.'
+      : (isTermDelivery
+      ? 'Variable decels require intrauterine resuscitation and newborn/postpartum assessment.'
       : (isPreeclampsia
       ? 'Findings support severe preeclampsia; monitor seizure risk and perfusion.'
       : (hasGbs
         ? 'GBS requires intrapartum antibiotic prophylaxis; monitor maternal/fetal status.'
-        : 'Review abnormal results with care team.')))),
+        : 'Review abnormal results with care team.'))))),
     currentMedDate: date,
-    currentMedOrder: isPostpartumHemorrhage ? buildMedicationOrderSummary(ensurePopulatedMeds(meds), 165) : (isPreeclampsia ? 'Magnesium sulfate IV per protocol' : (meds.length ? 'Penicillin G IV per labor protocol' : '')),
-    currentMedIndication: isPostpartumHemorrhage ? 'PPH bleeding/uterine tone management' : (isPreeclampsia ? 'Seizure prophylaxis' : (meds.length ? 'GBS intrapartum prophylaxis' : '')),
+    currentMedOrder: isPostpartumHemorrhage ? buildMedicationOrderSummary(ensurePopulatedMeds(meds), 165) : (isTermDelivery ? buildMedicationOrderSummary(ensurePopulatedMeds(meds), 165) : (isPreeclampsia ? 'Magnesium sulfate IV per protocol' : (meds.length ? 'Penicillin G IV per labor protocol' : ''))),
+    currentMedIndication: isPostpartumHemorrhage ? 'PPH bleeding/uterine tone management' : (isTermDelivery && meds.length ? 'Postpartum hemorrhage prevention' : (isPreeclampsia ? 'Seizure prophylaxis' : (meds.length ? 'GBS intrapartum prophylaxis' : ''))),
     nursingDiagnosis: '',
     goal: '',
     plan: '',
@@ -3711,7 +3763,7 @@ export default function App() {
   const [simulationNotesText, setSimulationNotesText] = useState('');
   const [simulationFileName, setSimulationFileName] = useState('');
   const [simulationParsed, setSimulationParsed] = useState(false);
-  const [simulationStatus, setSimulationStatus] = useState('Load a simulation PDF, then parse it into the concept map.');
+  const [simulationStatus, setSimulationStatus] = useState('Drop or upload a simulation PDF, then parse it into the concept map.');
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [openAiApiKey, setOpenAiApiKey] = useState('');
@@ -3941,13 +3993,13 @@ export default function App() {
       const text = await extractPdfText(file, (value, label) => setProgress(value, label));
       setSimulationNotesText(clean(text));
       setProgress(100, 'Simulation PDF text ready.');
-      setSimulationStatus('Simulation notes loaded. Click Parse Simulation Notes to fill the concept map.');
-      setStatus('Simulation PDF text extracted in the beta section.');
+      setSimulationStatus('Simulation notes loaded. Click Parse Beta to fill the concept map.');
+      setStatus('Simulation PDF text extracted. Parse Beta when ready.');
     } catch (err) {
       console.error(err);
       setProgress(0, '');
-      setSimulationStatus('Simulation PDF extraction failed. Paste the notes into the beta source box.');
-      setStatus('Simulation PDF extraction failed. Paste notes manually in the beta section.');
+      setSimulationStatus('Simulation PDF extraction failed. Paste the notes into the simulation source box.');
+      setStatus('Simulation PDF extraction failed. Paste notes manually in Case Intake.');
     } finally {
       setLoading(false);
     }
@@ -3957,7 +4009,7 @@ export default function App() {
     setSimulationNotesText('');
     setSimulationFileName('');
     setSimulationParsed(false);
-    setSimulationStatus('Load a simulation PDF, then parse it into the concept map.');
+    setSimulationStatus('Drop or upload a simulation PDF, then parse it into the concept map.');
     setFields((prev) => clearPriorityNursingFields({
       ...prev,
       nd1Assessment: '',
@@ -4004,6 +4056,21 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePdfDrop = (event, handler) => {
+    event.preventDefault();
+    const droppedFiles = Array.from(event.dataTransfer?.files || []);
+    const pdfFile = droppedFiles.find((file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''));
+    if (!pdfFile) {
+      setStatus('Drop a PDF file to load it into the builder.');
+      return;
+    }
+    handler(pdfFile);
+  };
+
+  const preventPdfDragDefault = (event) => {
+    event.preventDefault();
   };
 
   const applyAiParsedText = async () => {
@@ -4953,17 +5020,83 @@ export default function App() {
           <section className="card intake-card">
             <div className="card-header"><h2 className="card-title"><FileText size={18} style={{verticalAlign:'text-bottom', marginRight:8}} />Case Intake</h2></div>
             <div className="card-content">
-              <div className="intake-actions">
-                <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload Case PDF</button>
-                <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill From Case PDF</button>
+              <div className="intake-mode-grid">
+                <div
+                  className="dropzone typhon-dropzone"
+                  onDrop={(event) => handlePdfDrop(event, handleFile)}
+                  onDragOver={preventPdfDragDefault}
+                  onDragEnter={preventPdfDragDefault}
+                >
+                  <div className="dropzone-head">
+                    <span className="dropzone-icon"><Upload size={20} /></span>
+                    <div>
+                      <strong>Typhon Case Log</strong>
+                      <p>Drop the exported case PDF here, then auto fill the concept map.</p>
+                    </div>
+                  </div>
+                  <div className="dropzone-actions">
+                    <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload PDF</button>
+                    <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill</button>
+                  </div>
+                  <details className="source-panel compact-source">
+                    <summary>
+                      <span>{rawText.trim() ? 'Typhon source captured' : 'Paste Typhon text manually'}</span>
+                      <ChevronDown size={18} />
+                    </summary>
+                    <textarea className="large-text" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="PDF text appears here. You can paste case-log text if upload is not available." />
+                  </details>
+                </div>
+
+                <div
+                  className="dropzone simulation-dropzone"
+                  onDrop={(event) => handlePdfDrop(event, handleSimulationFile)}
+                  onDragOver={preventPdfDragDefault}
+                  onDragEnter={preventPdfDragDefault}
+                >
+                  <div className="dropzone-head">
+                    <span className="dropzone-icon beta"><Wand2 size={20} /></span>
+                    <div>
+                      <strong>Simulation Notes Beta</strong>
+                      <p>For vSim or narrative PDFs. It fills the same fields below for review.</p>
+                    </div>
+                  </div>
+                  <div className="status compact-status">
+                    <strong>Beta Status</strong>
+                    <div>{simulationStatus}</div>
+                  </div>
+                  <div className="dropzone-actions simulation-actions">
+                    <button className="btn primary" onClick={() => simulationFileInputRef.current?.click()} disabled={loading || aiLoading}>
+                      <Upload size={16} />Upload PDF
+                    </button>
+                    <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText, simulationFileName)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
+                      <Wand2 size={16} />Parse Beta
+                    </button>
+                    <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={!simulationParsed || loading || !templateReady}>
+                      <Download size={16} />Download
+                    </button>
+                    <button className="btn test-action" onClick={clearSimulationBeta} disabled={loading || aiLoading}>
+                      Clear
+                    </button>
+                  </div>
+                  <details className="source-panel compact-source">
+                    <summary>
+                      <span>{simulationNotesText.trim() ? 'Simulation source captured' : 'Paste simulation notes manually'}</span>
+                      <ChevronDown size={18} />
+                    </summary>
+                    <textarea
+                      className="large-text"
+                      value={simulationNotesText}
+                      onChange={(e) => {
+                        setSimulationNotesText(e.target.value);
+                        setSimulationFileName('');
+                        setSimulationParsed(false);
+                        setSimulationStatus('Simulation notes changed. Parse again before downloading the beta PDF.');
+                      }}
+                      placeholder="Simulation PDF text appears here. You can paste vSim notes or narrative simulation notes here."
+                    />
+                  </details>
+                </div>
               </div>
-              <details className="source-panel">
-                <summary>
-                  <span>{rawText.trim() ? 'Source text captured' : 'Paste case text manually'}</span>
-                  <ChevronDown size={18} />
-                </summary>
-                <textarea className="large-text" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="PDF text appears here. You can paste case-log text if upload is not available." />
-              </details>
               {(loading || aiLoading || parseProgress > 0) && (
                 <div className="progress-panel">
                   <strong>{parseProgressLabel || 'Progress'}</strong>
@@ -5088,60 +5221,6 @@ export default function App() {
               </div>
             </section>
 
-            <section className="card simulation-beta-card">
-              <div className="card-header"><h2 className="card-title"><Wand2 size={18} style={{verticalAlign:'text-bottom', marginRight:8}} />Nontraditional Notes Beta</h2></div>
-              <div className="card-content">
-                <div className="status export-status">
-                  <strong>Simulation Beta Status</strong>
-                  <div>{simulationStatus}</div>
-                </div>
-                <div className="beta-source-actions beta-action-grid">
-                  <button className="btn primary" onClick={() => simulationFileInputRef.current?.click()} disabled={loading || aiLoading}>
-                    <Upload size={16} />Load Simulation PDF
-                  </button>
-                  <button className="btn test-action" onClick={clearSimulationBeta} disabled={loading || aiLoading}>
-                    Clear
-                  </button>
-                  <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText, simulationFileName)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
-                    <Wand2 size={16} />Parse Simulation PDF
-                  </button>
-                  <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={!simulationParsed || loading || !templateReady}>
-                    <Download size={16} />Download Beta PDF
-                  </button>
-                </div>
-                <div className="simulation-diagnosis-editor">
-                  <h3>Nursing Diagnoses For This Simulation</h3>
-                  {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
-                    <details className="field-group" key={`simulation-${group.title}`} open>
-                      <summary>
-                        <h3>{group.title}</h3>
-                        <Plus size={18} />
-                      </summary>
-                      <div className="field-group-grid">
-                        {group.fields.map(renderConceptMapField)}
-                      </div>
-                    </details>
-                  ))}
-                </div>
-                <details className="source-panel">
-                  <summary>
-                    <span>{simulationNotesText.trim() ? 'Simulation source loaded' : 'Paste simulation notes manually'}</span>
-                    <ChevronDown size={18} />
-                  </summary>
-                  <textarea
-                    className="large-text"
-                    value={simulationNotesText}
-                    onChange={(e) => {
-                      setSimulationNotesText(e.target.value);
-                      setSimulationFileName('');
-                      setSimulationParsed(false);
-                      setSimulationStatus('Simulation notes changed. Parse again before downloading the beta PDF.');
-                    }}
-                    placeholder="Simulation PDF text appears here. You can paste vSim notes or narrative simulation notes here."
-                  />
-                </details>
-              </div>
-            </section>
           </div>
         </div>
       </div>
