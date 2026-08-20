@@ -60,7 +60,7 @@ const DEFAULT_STATE = {
   studentName: '',
   semesterMeta: '',
   courseMeta: '',
-  facultyMeta: 'Karen Colombo',
+  facultyMeta: '',
   siteMeta: '',
 };
 const EMPTY_MED = { nameClass: '', doseRoute: '', why: '', action: '', implications: '', sideEffects: '' };
@@ -3729,7 +3729,7 @@ function mergeNewCaseFields(prev = {}, parsedFields = {}) {
     week: parsedFields.week || '',
     semesterMeta: prev.semesterMeta || parsedFields.semesterMeta || '',
     courseMeta: prev.courseMeta || parsedFields.courseMeta || '',
-    facultyMeta: prev.facultyMeta || parsedFields.facultyMeta || 'Karen Colombo',
+    facultyMeta: prev.facultyMeta || parsedFields.facultyMeta || '',
     siteMeta: prev.siteMeta || parsedFields.siteMeta || '',
   };
 }
@@ -4546,7 +4546,7 @@ export default function App() {
   const fillSpacingTestData = () => {
     const testFields = {
       studentName: fields.studentName || 'Sample Student',
-      facultyMeta: fields.facultyMeta || 'Karen Colombo',
+      facultyMeta: fields.facultyMeta || '',
       date: '5/28/2026',
       clientName: 'J.D.',
       age: '84',
@@ -5042,12 +5042,12 @@ export default function App() {
                     <input type="text" value={fields.studentName || ''} onChange={(e) => updateField('studentName', e.target.value)} />
                   </div>
                   <div className="field-inline">
-                    <label>Clinical Faculty</label>
+                    <label>Instructor full name</label>
                     <div className="inline-save-row">
                       <input
                         type="text"
                         value={sessionFacultyName || fields.facultyMeta || ''}
-                        placeholder="Instructor name"
+                        placeholder="Instructor full name"
                         onChange={(e) => setSessionFacultyName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -5058,7 +5058,7 @@ export default function App() {
                       />
                       <button type="button" className="btn" onClick={applySessionFacultyName}>Add</button>
                     </div>
-                    <div className="field-hint">Click Add to confirm the instructor name for this concept map.</div>
+                    <div className="field-hint">Click Add to confirm the instructor full name for this concept map.</div>
                   </div>
                 </div>
                 {!metadataReady && (
