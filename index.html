@@ -480,6 +480,23 @@
       .ai-support-body { display: grid; gap: 10px; padding: 14px; background: rgba(255,255,251,0.72); }
       .ai-support-body strong { color: var(--text); }
       .ai-support-body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+      .concept-considerations {
+        display: grid; gap: 12px; margin-top: 14px;
+        border: 1px solid rgba(74, 105, 118, 0.32); border-radius: 8px;
+        padding: 14px; background: rgba(216, 229, 236, 0.24);
+      }
+      .concept-considerations h3 {
+        margin: 0; font-size: 15px; text-transform: uppercase;
+      }
+      .consideration-grid {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+      }
+      .consideration-card {
+        border: 1px solid var(--border); border-radius: 7px; padding: 12px;
+        background: var(--ink-white);
+      }
+      .consideration-card strong { display: block; margin-bottom: 5px; font-size: 14px; }
+      .consideration-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
       .med-card {
         border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: rgba(255, 255, 252, 0.92);
       }
@@ -491,6 +508,10 @@
       .export-card { border-color: #cbd5e1; }
       .export-card .card-content { display: grid; gap: 14px; align-items: start; }
       .export-status { display: grid; gap: 8px; }
+      .review-check {
+        border: 1px solid var(--ok-border); border-radius: 8px; padding: 12px;
+        background: rgba(223, 229, 207, 0.55);
+      }
       .export-choice {
         display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
         border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: rgba(255, 255, 252, 0.94);
@@ -504,6 +525,7 @@
       .view-vertical .split-2,
       .view-vertical .field-group-grid,
       .view-vertical .med-grid,
+      .view-vertical .consideration-grid,
       .view-vertical .export-choice {
         grid-template-columns: 1fr;
       }
@@ -544,7 +566,7 @@
         padding: 16px; max-height: 38vh; overflow: auto; font-size: 12px; line-height: 1.45;
       }
       @media (max-width: 900px) {
-        .signal-list, .intake-actions, .intake-mode-grid, .guide-screens, .med-grid, .export-choice, .beta-action-grid { grid-template-columns: 1fr; }
+        .signal-list, .intake-actions, .intake-mode-grid, .guide-screens, .med-grid, .consideration-grid, .export-choice, .beta-action-grid { grid-template-columns: 1fr; }
         .simulation-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       @media (max-width: 700px) { .split-2, .field-group-grid, .inline-save-row { grid-template-columns: 1fr; } .app-shell { padding: 14px; } }

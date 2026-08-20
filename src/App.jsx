@@ -1667,13 +1667,50 @@ function buildPriorityNursingFields(inputFields = {}, rawText = '') {
   };
 }
 
+function buildNursingConceptConsiderations(fields = {}, rawText = '') {
+  const text = clean(`${fields.diagnosis || ''} ${fields.medicalHistory || ''} ${fields.labInterpretation || ''} ${fields.safety || ''} ${fields.pain || ''} ${rawText || ''}`).toLowerCase();
+  const considerations = [];
+  const add = (title, body) => {
+    if (!considerations.some((item) => item.title === title)) considerations.push({ title, body });
+  };
+
+  if (/uti|urinary|bacteria|wbc|infection/.test(text)) {
+    add('Infection Pattern', 'Look for assessment cues such as fever trend, WBC/urinalysis results, urine changes, antibiotics, hydration, and patient response.');
+  }
+  if (/weakness|fatigue|syncope|dizziness|fall|mobility/.test(text)) {
+    add('Safety And Mobility', 'Consider whether weakness, age, dizziness, anticoagulants, or poor tolerance make falls, assisted ambulation, or activity pacing a priority.');
+  }
+  if (/bleed|hematuria|eliquis|apixaban|anticoagulant|postpartum hemorrhage|qbl/.test(text)) {
+    add('Bleeding And Perfusion', 'Connect bleeding risk or blood loss with vital signs, hematuria, Hgb/Hct, skin findings, urine output, and the need for close reassessment.');
+  }
+  if (/shortness of breath|\bsob\b|respiratory|breath|oxygen|fetal heart|variable decel|cord|gas exchange/.test(text)) {
+    add('Oxygenation', 'Think about respiratory status or fetal oxygenation cues, what worsens them, and which interventions directly improve oxygen delivery.');
+  }
+  if (/pain|headache|contraction|incision|sore/.test(text)) {
+    add('Comfort', 'Separate the pain score from the cause, location, expected course, interventions used, and how the client responds afterward.');
+  }
+  if (/teach|education|knowledge|newborn|medication|warning sign|discharge|understanding/.test(text)) {
+    add('Teaching Needs', 'Identify what the client needs to understand before discharge: medications, warning signs, safety steps, follow-up, and when to call for help.');
+  }
+  if (/cardiac|heart failure|chf|atrial fibrillation|hypertension|bp|blood pressure/.test(text)) {
+    add('Cardiac Status', 'Tie cardiac history to blood pressure, pulse/rhythm, edema, fatigue, medications, and signs that would need reporting.');
+  }
+
+  if (!considerations.length) {
+    add('Start With The Strongest Cue', 'Choose the most important abnormal finding first, then connect it to a focused diagnosis, action, rationale, and evaluation.');
+    add('Use Source-Based Evidence', 'Prefer details clearly found in the case log. If a value is missing, leave it for manual review rather than inventing it.');
+  }
+
+  return considerations.slice(0, 5);
+}
+
 function getReviewReasonForValue(value = '') {
   const text = clean(String(value || ''));
   if (!text) return 'Missing';
   if (isIntentionalNone(text)) return '';
   if (/not assessed in case log/i.test(text)) return 'Not in case log';
   if (/need to verify|need to assess|verify against|verify exact|verify in chart|verify in mar\/emr/i.test(text)) return 'Verify';
-  if (/ai generated|estimate|estimated trend|patient did not specify|selected from class-level entry/i.test(text)) return 'AI generated';
+  if (/ai generated|estimate|estimated trend|patient did not specify|selected from class-level entry/i.test(text)) return 'Review';
   if (/needs nursing diagnosis|set a measurable|develop plan of care|document interventions|add rationale|evaluate patient response|document reassessment/i.test(text)) {
     return 'Draft placeholder';
   }
@@ -1695,7 +1732,7 @@ function getMedicationReviewItems(medications = []) {
       const reasons = MED_KEYS
         .map((key) => getReviewReasonForValue(med?.[key]))
         .filter(Boolean);
-      if (med?.aiGenerated) reasons.push('AI generated');
+      if (med?.aiGenerated) reasons.push('Review');
       return reasons.length
         ? { index, reasons: Array.from(new Set(reasons)) }
         : null;
@@ -3760,10 +3797,6 @@ export default function App() {
   const [fields, setFields] = useState(DEFAULT_STATE);
   const [medications, setMedications] = useState(MED_DEFAULT);
   const [rawText, setRawText] = useState('');
-  const [simulationNotesText, setSimulationNotesText] = useState('');
-  const [simulationFileName, setSimulationFileName] = useState('');
-  const [simulationParsed, setSimulationParsed] = useState(false);
-  const [simulationStatus, setSimulationStatus] = useState('Drop or upload a simulation PDF, then parse it into the concept map.');
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [openAiApiKey, setOpenAiApiKey] = useState('');
@@ -3778,6 +3811,7 @@ export default function App() {
   const [outputStatus, setOutputStatus] = useState('Idle. Generate final output when ready.');
   const [outputLastRun, setOutputLastRun] = useState('');
   const [outputError, setOutputError] = useState('');
+  const [reviewComplete, setReviewComplete] = useState(false);
   const [templateReady, setTemplateReady] = useState(false);
   const [templateFingerprint, setTemplateFingerprint] = useState('');
   const [templateSizeBytes, setTemplateSizeBytes] = useState(0);
@@ -3800,7 +3834,6 @@ export default function App() {
   const [articleHistory, setArticleHistory] = useState([]);
   const [sessionFacultyName, setSessionFacultyName] = useState('');
   const fileInputRef = useRef(null);
-  const simulationFileInputRef = useRef(null);
   const hasAutoAdvancedStep1Ref = useRef(false);
 
   const metadataReady = useMemo(() => {
@@ -3823,6 +3856,7 @@ export default function App() {
       return reason ? { key, label: CONCEPT_MAP_OUTPUT_LABELS[key] || key, reason } : null;
     })
     .filter(Boolean), [conceptMapData]);
+  const nursingConceptConsiderations = useMemo(() => buildNursingConceptConsiderations(fields, rawText), [fields, rawText]);
   const workflowSignals = useMemo(() => [
     {
       label: 'Set Up',
@@ -3866,21 +3900,13 @@ export default function App() {
   const canAddMedicationRow = medications.length < MED_TEMPLATE_ROW_CAP;
   const updateField = (key, value) => setFields((prev) => ({ ...prev, [key]: value }));
   const hasApiKey = Boolean(openAiApiKey.trim());
-  const facultyOptions = useMemo(() => {
-    const options = [...FACULTY_OPTIONS];
-    [fields.facultyMeta, sessionFacultyName].forEach((name) => {
-      const normalized = normalizeFacultyName(name);
-      if (normalized && !options.includes(normalized)) options.push(normalized);
-    });
-    return options;
-  }, [fields.facultyMeta, sessionFacultyName]);
-
   const applySessionFacultyName = () => {
     const nextName = normalizeFacultyName(sessionFacultyName);
     if (!nextName) {
       setStatus('Enter an instructor name to use for this session.');
       return;
     }
+    if (!window.confirm(`Use "${nextName}" as the instructor name for this concept map?`)) return;
     setSessionFacultyName(nextName);
     updateField('facultyMeta', nextName);
     setStatus(`${nextName} is selected for this session only.`);
@@ -3958,77 +3984,12 @@ export default function App() {
     setRawText(parsed.rawText);
     setSequenceStep((prev) => Math.max(prev, 3));
     setIsFinalized(false);
+    setReviewComplete(false);
     setStatus(
       parsed.medications.length > MED_TEMPLATE_ROW_CAP
         ? `Source parse complete. Medication rows are capped at ${MED_TEMPLATE_ROW_CAP}; extra entries were not added. Review flagged fields before export.`
-        : 'Source parse complete. Concept-map values were added; app-generated items are flagged for review.'
+        : 'Source parse complete. Concept-map values were added; review flagged fields before export.'
     );
-  };
-
-  const applySimulationNotesText = (text, sourceHint = '') => {
-    const parsed = parseSimulationNotesText(text, sourceHint);
-    const sanitizedFields = sanitizeSimulationParsedFields(parsed.fields);
-    const bestMatchedFields = ensureConceptMapFields(sanitizedFields, parsed.rawText, parsed.medications);
-    setFields((prev) => mergeNewCaseFields(prev, bestMatchedFields));
-    setMedications(ensurePopulatedMeds(parsed.medications));
-    setRawText(parsed.rawText);
-    setSimulationNotesText(parsed.rawText);
-    setSimulationParsed(true);
-    setSequenceStep((prev) => Math.max(prev, 3));
-    setIsFinalized(false);
-    setSimulationStatus('Simulation notes parsed into the concept map. Review fields, then download the beta PDF.');
-    setStatus('Simulation notes beta filled the concept map. Review highlighted fields before exporting.');
-    setOutputStatus('Simulation notes beta applied. Export when the fields look right.');
-  };
-
-  const handleSimulationFile = async (file) => {
-    if (!file) return;
-    setLoading(true);
-    setProgress(5, 'Preparing simulation PDF extraction...');
-    setSimulationFileName(file.name || '');
-    setSimulationParsed(false);
-    setSimulationStatus('Extracting simulation notes from PDF...');
-    setStatus('Extracting simulation PDF text...');
-    try {
-      const text = await extractPdfText(file, (value, label) => setProgress(value, label));
-      setSimulationNotesText(clean(text));
-      setProgress(100, 'Simulation PDF text ready.');
-      setSimulationStatus('Simulation notes loaded. Click Parse Beta to fill the concept map.');
-      setStatus('Simulation PDF text extracted. Parse Beta when ready.');
-    } catch (err) {
-      console.error(err);
-      setProgress(0, '');
-      setSimulationStatus('Simulation PDF extraction failed. Paste the notes into the simulation source box.');
-      setStatus('Simulation PDF extraction failed. Paste notes manually in Case Intake.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearSimulationBeta = () => {
-    setSimulationNotesText('');
-    setSimulationFileName('');
-    setSimulationParsed(false);
-    setSimulationStatus('Drop or upload a simulation PDF, then parse it into the concept map.');
-    setFields((prev) => clearPriorityNursingFields({
-      ...prev,
-      nd1Assessment: '',
-      nd1Diagnosis: '',
-      nd1Rationale: '',
-      nd1Intervention: '',
-      nd1Evaluation: '',
-      nd2Assessment: '',
-      nd2Diagnosis: '',
-      nd2Rationale: '',
-      nd2Intervention: '',
-      nd2Evaluation: '',
-      nd3Assessment: '',
-      nd3Diagnosis: '',
-      nd3Rationale: '',
-      nd3Intervention: '',
-      nd3Evaluation: '',
-    }));
-    setStatus('Simulation beta cleared.');
   };
 
   const handleFile = async (file) => {
@@ -4043,6 +4004,7 @@ export default function App() {
     setOutputStatus('Idle. Generate final output when ready.');
     setOutputLastRun('');
     setOutputError('');
+    setReviewComplete(false);
     try {
       const text = await extractPdfText(file, (value, label) => setProgress(value, label));
       setRawText(clean(text));
@@ -4111,12 +4073,13 @@ export default function App() {
       setMedications(ensurePopulatedMeds(parsed.medications));
       setSequenceStep((prev) => Math.max(prev, 3));
       setIsFinalized(false);
+      setReviewComplete(false);
       setApiKeyVerified(true);
       setProgress(100, 'AI parsing complete.');
       setStatus(
         parsed.medications.length > MED_TEMPLATE_ROW_CAP
-          ? `AI source parse complete. Medication rows are capped at ${MED_TEMPLATE_ROW_CAP}; extra entries were not added. Review flagged fields before export.`
-          : 'AI source parse complete. Concept-map values were added; AI-generated items are flagged for review.'
+          ? `Source parse complete. Medication rows are capped at ${MED_TEMPLATE_ROW_CAP}; extra entries were not added. Review flagged fields before export.`
+          : 'Source parse complete. Concept-map values were added; review flagged fields before export.'
       );
     } catch (err) {
       console.error(err);
@@ -4613,7 +4576,7 @@ export default function App() {
 
   const developPriorityNursingBeta = () => {
     if (sequenceStep < 3) {
-      setStatus('Auto fill a case first, then use the beta nursing priorities option.');
+      setStatus('Auto fill a case first, then review nursing priority ideas.');
       return;
     }
     const priorityFields = buildPriorityNursingFields(fields, rawText);
@@ -4621,8 +4584,8 @@ export default function App() {
     setShowStep3Fields(true);
     setSequenceStep((prev) => Math.max(prev, 3));
     setIsFinalized(false);
-    setStatus('Beta nursing priorities added. These are AI-generated testing support and must be reviewed before export.');
-    setOutputStatus('Nursing priority boxes filled by beta helper. Verify/edit before downloading PDF.');
+    setStatus('Nursing priority draft added for review.');
+    setOutputStatus('Nursing priority boxes need verification before downloading PDF.');
   };
 
   const addMedicationRow = () => {
@@ -4761,7 +4724,7 @@ export default function App() {
     const fieldLength = clean(String(fields[key] || '')).length;
     const priorityPrompt = PRIORITY_FIELD_PROMPTS[key] || '';
     const overExportLimit = Boolean(exportLimit && fieldLength > exportLimit);
-    const highlightReview = Boolean(reviewReason && ['Verify', 'AI generated', 'Missing'].includes(reviewReason)) || overExportLimit;
+    const highlightReview = Boolean(reviewReason && ['Verify', 'Review', 'Missing'].includes(reviewReason)) || overExportLimit;
     const priorityDiagnosisOptions = [
       'Deficient fluid volume',
       'Ineffective tissue perfusion',
@@ -4866,7 +4829,7 @@ export default function App() {
       <div className="guide-body">
         <div className="guide-copy">
           <strong>Use the exported Typhon case log as your source.</strong>
-          <p>The builder fills the concept-map draft from that log, then you review the marked fields and export the finished PDF. Think of this as a guided first pass, not a locked form.</p>
+          <p>The builder fills the concept-map draft from that log, then you review the marked fields and export the finished PDF. Missing or uncertain details stay visible for you to complete.</p>
         </div>
         <div className="guide-screens" aria-label="Onboarding walkthrough">
           <div className="guide-screen">
@@ -4898,7 +4861,7 @@ export default function App() {
               <div className="mini-bar"><span></span><span></span><span></span></div>
               <div className="mini-field"><b>Allergies</b><em className="mini-flag gold">Verify</em></div>
               <div className="mini-field"><b>Edema</b><em className="mini-flag rose">Missing</em></div>
-              <div className="mini-field"><b>Medication</b><em className="mini-flag plum">AI generated</em></div>
+              <div className="mini-field"><b>Medication</b><em className="mini-flag plum">Review</em></div>
             </div>
             <strong>3. Review flags</strong>
             <p>Marked values need your eyes before the final export.</p>
@@ -4918,7 +4881,7 @@ export default function App() {
         <div className="guide-flags">
           <span className="guide-flag missing">Missing: no clear source value was found.</span>
           <span className="guide-flag verify">Verify: check this against the chart or case log.</span>
-          <span className="guide-flag generated">AI generated: review before submitting.</span>
+          <span className="guide-flag generated">Review: check suggested or uncertain text.</span>
           <span className="guide-flag limit">PDF limit: shorten text so it fits the box.</span>
         </div>
       </div>
@@ -4931,7 +4894,7 @@ export default function App() {
         <div className="topbar">
           <div className="title">
             <h1>Concept Map Builder</h1>
-            <p>This concept builder helps create well-formatted, accurate concept maps with a smoother workflow. Output depends on the case log you provide: a clearer case log gives better results, and manual entry is available anywhere you need to review, correct, or complete details.</p>
+            <p>This concept builder helps create well-formatted concept maps with a smoother workflow. Output depends on the case log you provide: a clearer case log gives better results, and manual entry is available anywhere you need to review, correct, or complete details.</p>
           </div>
           <div className="view-toggle" aria-label="View mode">
             <button
@@ -4952,7 +4915,6 @@ export default function App() {
             </button>
           </div>
           <input ref={fileInputRef} type="file" accept="application/pdf" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
-          <input ref={simulationFileInputRef} type="file" accept="application/pdf" hidden onChange={(e) => handleSimulationFile(e.target.files?.[0])} />
         </div>
 
         {typhonGuide}
@@ -4985,15 +4947,11 @@ export default function App() {
                   </div>
                   <div className="field-inline">
                     <label>Clinical Faculty</label>
-                    <select value={fields.facultyMeta || ''} onChange={(e) => updateField('facultyMeta', e.target.value)}>
-                      <option value="">Select faculty</option>
-                      {facultyOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
-                    <div className="inline-save-row" style={{ marginTop: 8 }}>
+                    <div className="inline-save-row">
                       <input
                         type="text"
-                        value={sessionFacultyName}
-                        placeholder="Temporary instructor name"
+                        value={sessionFacultyName || fields.facultyMeta || ''}
+                        placeholder="Instructor name"
                         onChange={(e) => setSessionFacultyName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -5002,9 +4960,9 @@ export default function App() {
                           }
                         }}
                       />
-                      <button type="button" className="btn" onClick={applySessionFacultyName}>Use</button>
+                      <button type="button" className="btn" onClick={applySessionFacultyName}>Add</button>
                     </div>
-                    <div className="field-hint">Custom instructor names are kept for this browser session only.</div>
+                    <div className="field-hint">Click Add to confirm the instructor name for this concept map.</div>
                   </div>
                 </div>
                 {!metadataReady && (
@@ -5020,82 +4978,30 @@ export default function App() {
           <section className="card intake-card">
             <div className="card-header"><h2 className="card-title"><FileText size={18} style={{verticalAlign:'text-bottom', marginRight:8}} />Case Intake</h2></div>
             <div className="card-content">
-              <div className="intake-mode-grid">
-                <div
-                  className="dropzone typhon-dropzone"
-                  onDrop={(event) => handlePdfDrop(event, handleFile)}
-                  onDragOver={preventPdfDragDefault}
-                  onDragEnter={preventPdfDragDefault}
-                >
-                  <div className="dropzone-head">
-                    <span className="dropzone-icon"><Upload size={20} /></span>
-                    <div>
-                      <strong>Typhon Case Log</strong>
-                      <p>Drop the exported case PDF here, then auto fill the concept map.</p>
-                    </div>
+              <div
+                className="dropzone typhon-dropzone public-dropzone"
+                onDrop={(event) => handlePdfDrop(event, handleFile)}
+                onDragOver={preventPdfDragDefault}
+                onDragEnter={preventPdfDragDefault}
+              >
+                <div className="dropzone-head">
+                  <span className="dropzone-icon"><Upload size={20} /></span>
+                  <div>
+                    <strong>Typhon Case Log</strong>
+                    <p>The quality of the output depends on the quality of the input. This tool uses the case log to place available information, flag missing details, and leave review work visible instead of pretending unknown data is confirmed.</p>
                   </div>
-                  <div className="dropzone-actions">
-                    <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload PDF</button>
-                    <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill</button>
-                  </div>
-                  <details className="source-panel compact-source">
-                    <summary>
-                      <span>{rawText.trim() ? 'Typhon source captured' : 'Paste Typhon text manually'}</span>
-                      <ChevronDown size={18} />
-                    </summary>
-                    <textarea className="large-text" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="PDF text appears here. You can paste case-log text if upload is not available." />
-                  </details>
                 </div>
-
-                <div
-                  className="dropzone simulation-dropzone"
-                  onDrop={(event) => handlePdfDrop(event, handleSimulationFile)}
-                  onDragOver={preventPdfDragDefault}
-                  onDragEnter={preventPdfDragDefault}
-                >
-                  <div className="dropzone-head">
-                    <span className="dropzone-icon beta"><Wand2 size={20} /></span>
-                    <div>
-                      <strong>Simulation Notes Beta</strong>
-                      <p>For vSim or narrative PDFs. It fills the same fields below for review.</p>
-                    </div>
-                  </div>
-                  <div className="status compact-status">
-                    <strong>Beta Status</strong>
-                    <div>{simulationStatus}</div>
-                  </div>
-                  <div className="dropzone-actions simulation-actions">
-                    <button className="btn primary" onClick={() => simulationFileInputRef.current?.click()} disabled={loading || aiLoading}>
-                      <Upload size={16} />Upload PDF
-                    </button>
-                    <button className="btn primary-soft" onClick={() => applySimulationNotesText(simulationNotesText, simulationFileName)} disabled={!simulationNotesText.trim() || loading || aiLoading}>
-                      <Wand2 size={16} />Parse Beta
-                    </button>
-                    <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={!simulationParsed || loading || !templateReady}>
-                      <Download size={16} />Download
-                    </button>
-                    <button className="btn test-action" onClick={clearSimulationBeta} disabled={loading || aiLoading}>
-                      Clear
-                    </button>
-                  </div>
-                  <details className="source-panel compact-source">
-                    <summary>
-                      <span>{simulationNotesText.trim() ? 'Simulation source captured' : 'Paste simulation notes manually'}</span>
-                      <ChevronDown size={18} />
-                    </summary>
-                    <textarea
-                      className="large-text"
-                      value={simulationNotesText}
-                      onChange={(e) => {
-                        setSimulationNotesText(e.target.value);
-                        setSimulationFileName('');
-                        setSimulationParsed(false);
-                        setSimulationStatus('Simulation notes changed. Parse again before downloading the beta PDF.');
-                      }}
-                      placeholder="Simulation PDF text appears here. You can paste vSim notes or narrative simulation notes here."
-                    />
-                  </details>
+                <div className="dropzone-actions">
+                  <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload PDF</button>
+                  <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill</button>
                 </div>
+                <details className="source-panel compact-source">
+                  <summary>
+                    <span>{rawText.trim() ? 'Typhon source captured' : 'Paste Typhon text manually'}</span>
+                    <ChevronDown size={18} />
+                  </summary>
+                  <textarea className="large-text" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="PDF text appears here. You can paste case-log text if upload is not available." />
+                </details>
               </div>
               {(loading || aiLoading || parseProgress > 0) && (
                 <div className="progress-panel">
@@ -5105,7 +5011,7 @@ export default function App() {
               )}
               {!!conceptMapReviewItems.length && sequenceStep >= 3 && (
                 <div className="warning">
-                  <strong><AlertTriangle size={16} style={{verticalAlign:'text-bottom', marginRight:6}} />Missing or AI-generated concept-map fields</strong>
+                  <strong><AlertTriangle size={16} style={{verticalAlign:'text-bottom', marginRight:6}} />Fields Needing Review</strong>
                   <div className="badges">
                     {conceptMapReviewItems.slice(0, 18).map((item) => (
                       <span key={item.key} className="badge review">{item.label}: {item.reason}</span>
@@ -5163,6 +5069,9 @@ export default function App() {
             <section className="card priority-card">
               <div className="card-header"><h2 className="card-title">Nursing Diagnosis</h2></div>
               <div className="card-content">
+                <div className="status">
+                  Enter this section yourself after reviewing the concept-map fields. The prompts below are only thinking cues to help you decide what belongs in the nursing-priority boxes.
+                </div>
                 {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
                   <details className="field-group" key={group.title}>
                     <summary>
@@ -5174,19 +5083,17 @@ export default function App() {
                     </div>
                   </details>
                 ))}
-                <details className="ai-support-panel">
-                  <summary>
-                    <span><Wand2 size={16} />Optional AI-generated support</span>
-                    <Plus size={18} />
-                  </summary>
-                  <div className="ai-support-body">
-                    <strong>This is a testing aid only.</strong>
-                    <p>It can draft nursing-priority text from the case log, but it is not meant to replace your own clinical judgment, instructor requirements, or manual review.</p>
-                    <button className="btn" onClick={developPriorityNursingBeta} disabled={sequenceStep < 3 || loading || aiLoading}>
-                      <Wand2 size={16} />Fill nursing priorities for review
-                    </button>
+                <div className="concept-considerations">
+                  <h3>Concepts To Consider</h3>
+                  <div className="consideration-grid">
+                    {nursingConceptConsiderations.map((item) => (
+                      <div className="consideration-card" key={item.title}>
+                        <strong>{item.title}</strong>
+                        <p>{item.body}</p>
+                      </div>
+                    ))}
                   </div>
-                </details>
+                </div>
               </div>
             </section>
 
@@ -5200,22 +5107,17 @@ export default function App() {
                   {outputLastRun && <div>Last export: {outputLastRun}</div>}
                   {outputError && <div style={{ color: '#991b1b' }}>Error: {outputError}</div>}
                 </div>
+                <label className="checkbox-row review-check">
+                  <input type="checkbox" checked={reviewComplete} onChange={(e) => setReviewComplete(e.target.checked)} />
+                  <span>All done: I reviewed the fields and completed anything my instructor expects.</span>
+                </label>
                 <div className="export-choice">
                   <div>
-                    <strong>Normal class map</strong>
+                    <strong>Download concept map</strong>
                     <span>Downloads the concept map with the nursing-priority boxes blank.</span>
                   </div>
-                  <button className="btn primary" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: false })} disabled={sequenceStep < 3 || loading || !templateReady}>
+                  <button className="btn primary" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: false })} disabled={!reviewComplete || sequenceStep < 3 || loading || !templateReady}>
                     <Download size={16} />Download PDF
-                  </button>
-                </div>
-                <div className="export-choice">
-                  <div>
-                    <strong>Include nursing priorities</strong>
-                    <span>Uses the separate beta/manual nursing-priority fields above.</span>
-                  </div>
-                  <button className="btn" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: true })} disabled={sequenceStep < 3 || loading || !templateReady}>
-                    <Download size={16} />Download With Priorities
                   </button>
                 </div>
               </div>
