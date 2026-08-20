@@ -497,6 +497,33 @@
       }
       .consideration-card strong { display: block; margin-bottom: 5px; font-size: 14px; }
       .consideration-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+      .thinking-cue-panel {
+        display: grid; gap: 12px; padding-top: 12px; border-top: 1px solid rgba(74, 105, 118, 0.22);
+      }
+      .thinking-cue-header {
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      }
+      .thinking-cue-header strong { display: block; font-size: 15px; }
+      .thinking-cue-header span { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+      .thinking-cue-card {
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center;
+        border: 1px solid rgba(87, 115, 130, 0.42); border-radius: 8px; padding: 12px;
+        background: rgba(255, 255, 252, 0.96);
+        box-shadow: 0 10px 26px rgba(45, 42, 34, 0.06);
+      }
+      .thinking-cue-copy { min-width: 0; }
+      .thinking-cue-copy strong { display: block; margin: 2px 0 6px; font-size: 16px; }
+      .thinking-cue-copy p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+      .cue-counter {
+        display: inline-block; color: #4a6976; font-size: 12px; font-weight: 900; text-transform: uppercase;
+      }
+      .cue-empty { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+      .icon-btn {
+        width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid var(--border); border-radius: 999px; background: var(--ink-white); color: var(--text);
+        cursor: pointer;
+      }
+      .icon-btn:disabled { opacity: 0.38; cursor: not-allowed; }
       .med-card {
         border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: rgba(255, 255, 252, 0.92);
       }

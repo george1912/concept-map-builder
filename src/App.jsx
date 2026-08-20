@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, CircleDashed, Columns2, Rows3, Plus } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, CircleDashed, Columns2, Rows3, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { jsPDF } from 'jspdf';
@@ -1702,6 +1702,65 @@ function buildNursingConceptConsiderations(fields = {}, rawText = '') {
   }
 
   return considerations.slice(0, 5);
+}
+
+function buildOnDemandThinkingCues(fields = {}, rawText = '') {
+  const text = clean(`${fields.diagnosis || ''} ${fields.medicalHistory || ''} ${fields.physicalOther || ''} ${fields.labInterpretation || ''} ${fields.currentMedicationPlan || ''} ${fields.safety || ''} ${fields.pain || ''} ${rawText || ''}`).toLowerCase();
+  const cues = [];
+  const add = (title, body, matcher = null) => {
+    if (matcher && !matcher.test(text)) return;
+    if (!cues.some((item) => item.title === title)) cues.push({ title, body });
+  };
+
+  add(
+    'Start With Source Cues',
+    'Pick one abnormal finding from the case log, then connect it to one priority problem, one action, and one measurable response.'
+  );
+  add(
+    'Infection Reasoning',
+    'Check whether fever, WBC, urinalysis, urine symptoms, antibiotics, or hydration status support an infection-focused priority.',
+    /uti|urinary|bacteria|wbc|leukocyte|nitrite|infection|antibiotic|ceftriaxone|amoxicillin/
+  );
+  add(
+    'Perfusion Check',
+    'Use blood pressure, pulse, dizziness, syncope, edema, Hgb/Hct, and cardiac history to decide whether perfusion needs priority attention.',
+    /syncope|dizziness|bp|blood pressure|hypertension|hypotension|hgb|hemoglobin|hct|anemia|cardiac|heart|chf|edema/
+  );
+  add(
+    'Safety Lens',
+    'Look for age, weakness, mobility limits, anticoagulants, pain, altered orientation, or dizziness before choosing a fall or injury priority.',
+    /fall|weakness|fatigue|mobility|ambulat|assist|eliquis|apixaban|anticoagulant|confusion|orientation|dizziness/
+  );
+  add(
+    'Respiratory Focus',
+    'Compare SOB, breath sounds, oxygen saturation, work of breathing, fatigue, and activity tolerance before writing an oxygenation priority.',
+    /sob|shortness of breath|oxygen|resp|breath|lung|pulm|spo2|pulse ox|dyspnea/
+  );
+  add(
+    'Comfort Versus Cause',
+    'If pain is present, separate the pain score from the underlying cause, location, interventions, and reassessment result.',
+    /pain|headache|incision|sore|discomfort|contraction/
+  );
+  add(
+    'Medication Link',
+    'Tie each medication to a reason in the case, then watch for the most relevant safety concern or teaching point.',
+    /medication|meds|drug|insulin|eliquis|apixaban|furosemide|lasix|ceftriaxone|amoxicillin|metoprolol|carvedilol/
+  );
+  add(
+    'Teaching Moment',
+    'Look for discharge needs, warning signs, new medications, lifestyle instructions, or gaps in understanding that need patient teaching.',
+    /teach|education|knowledge|understand|discharge|warning sign|follow-up|follow up|instructions/
+  );
+  add(
+    'Evaluation Should Match',
+    'Make the evaluation answer the intervention directly: what improved, what stayed the same, and what still needs reassessment.'
+  );
+  add(
+    'Keep Priorities Distinct',
+    'Make each nursing priority cover a different problem area so the three boxes do not repeat the same risk or symptom.'
+  );
+
+  return cues;
 }
 
 function getReviewReasonForValue(value = '') {
@@ -3833,6 +3892,8 @@ export default function App() {
   const [articleError, setArticleError] = useState('');
   const [articleHistory, setArticleHistory] = useState([]);
   const [sessionFacultyName, setSessionFacultyName] = useState('');
+  const [generatedThinkingCues, setGeneratedThinkingCues] = useState([]);
+  const [activeThinkingCueIndex, setActiveThinkingCueIndex] = useState(0);
   const fileInputRef = useRef(null);
   const hasAutoAdvancedStep1Ref = useRef(false);
 
@@ -3857,6 +3918,7 @@ export default function App() {
     })
     .filter(Boolean), [conceptMapData]);
   const nursingConceptConsiderations = useMemo(() => buildNursingConceptConsiderations(fields, rawText), [fields, rawText]);
+  const onDemandThinkingCues = useMemo(() => buildOnDemandThinkingCues(fields, rawText), [fields, rawText]);
   const workflowSignals = useMemo(() => [
     {
       label: 'Set Up',
@@ -3881,6 +3943,7 @@ export default function App() {
   ], [metadataReady, rawText, sequenceStep]);
 
   const docPreview = useMemo(() => buildDocText(fields, medications), [fields, medications]);
+  const activeThinkingCue = generatedThinkingCues[activeThinkingCueIndex] || null;
   const articlePreview = useMemo(() => {
     if (!articleResult) return '';
     return [
@@ -3910,6 +3973,36 @@ export default function App() {
     setSessionFacultyName(nextName);
     updateField('facultyMeta', nextName);
     setStatus(`${nextName} is selected for this session only.`);
+  };
+  const resetThinkingCuesForCase = () => {
+    setGeneratedThinkingCues([]);
+    setActiveThinkingCueIndex(0);
+  };
+  const generateThinkingCue = () => {
+    const usedCount = generatedThinkingCues.length;
+    if (usedCount >= 3) {
+      setStatus('Thinking cues are limited to 3 per case.');
+      return;
+    }
+    const visibleTitles = new Set([
+      ...nursingConceptConsiderations.map((item) => item.title),
+      ...generatedThinkingCues.map((item) => item.title),
+    ]);
+    const nextCue = onDemandThinkingCues.find((item) => !visibleTitles.has(item.title))
+      || onDemandThinkingCues[usedCount % Math.max(onDemandThinkingCues.length, 1)]
+      || {
+        title: 'Review The Strongest Cue',
+        body: 'Choose the clearest abnormal source detail, then connect it to one priority problem and one measurable response.',
+      };
+    setGeneratedThinkingCues((prev) => [...prev, nextCue]);
+    setActiveThinkingCueIndex(usedCount);
+    setStatus(`Thinking cue ${usedCount + 1} of 3 added for this case.`);
+  };
+  const showPreviousThinkingCue = () => {
+    setActiveThinkingCueIndex((index) => Math.max(0, index - 1));
+  };
+  const showNextThinkingCue = () => {
+    setActiveThinkingCueIndex((index) => Math.min(generatedThinkingCues.length - 1, index + 1));
   };
 
   useEffect(() => {
@@ -3985,6 +4078,7 @@ export default function App() {
     setSequenceStep((prev) => Math.max(prev, 3));
     setIsFinalized(false);
     setReviewComplete(false);
+    resetThinkingCuesForCase();
     setStatus(
       parsed.medications.length > MED_TEMPLATE_ROW_CAP
         ? `Source parse complete. Medication rows are capped at ${MED_TEMPLATE_ROW_CAP}; extra entries were not added. Review flagged fields before export.`
@@ -4005,6 +4099,7 @@ export default function App() {
     setOutputLastRun('');
     setOutputError('');
     setReviewComplete(false);
+    resetThinkingCuesForCase();
     try {
       const text = await extractPdfText(file, (value, label) => setProgress(value, label));
       setRawText(clean(text));
@@ -4074,6 +4169,7 @@ export default function App() {
       setSequenceStep((prev) => Math.max(prev, 3));
       setIsFinalized(false);
       setReviewComplete(false);
+      resetThinkingCuesForCase();
       setApiKeyVerified(true);
       setProgress(100, 'AI parsing complete.');
       setStatus(
@@ -5092,6 +5188,50 @@ export default function App() {
                         <p>{item.body}</p>
                       </div>
                     ))}
+                  </div>
+                  <div className="thinking-cue-panel">
+                    <div className="thinking-cue-header">
+                      <div>
+                        <strong>On-Demand Thinking Cues</strong>
+                        <span>{generatedThinkingCues.length}/3 used for this case</span>
+                      </div>
+                      <button
+                        className="btn primary-soft"
+                        onClick={generateThinkingCue}
+                        disabled={sequenceStep < 3 || generatedThinkingCues.length >= 3}
+                      >
+                        <Wand2 size={16} />Generate Cue
+                      </button>
+                    </div>
+                    {activeThinkingCue ? (
+                      <div className="thinking-cue-card">
+                        <button
+                          className="icon-btn"
+                          type="button"
+                          onClick={showPreviousThinkingCue}
+                          disabled={activeThinkingCueIndex === 0}
+                          aria-label="Previous thinking cue"
+                        >
+                          <ChevronLeft size={18} />
+                        </button>
+                        <div className="thinking-cue-copy">
+                          <span className="cue-counter">Cue {activeThinkingCueIndex + 1} of {generatedThinkingCues.length}</span>
+                          <strong>{activeThinkingCue.title}</strong>
+                          <p>{activeThinkingCue.body}</p>
+                        </div>
+                        <button
+                          className="icon-btn"
+                          type="button"
+                          onClick={showNextThinkingCue}
+                          disabled={activeThinkingCueIndex >= generatedThinkingCues.length - 1}
+                          aria-label="Next thinking cue"
+                        >
+                          <ChevronRight size={18} />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="cue-empty">Generate up to three extra prompts after auto fill. These stay in the builder and do not print on the PDF.</p>
+                    )}
                   </div>
                 </div>
               </div>
