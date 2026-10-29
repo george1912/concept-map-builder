@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, CircleDashed, Columns2, Rows3, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, XCircle, CircleDashed, Columns2, Rows3, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { jsPDF } from 'jspdf';
@@ -1708,8 +1708,13 @@ function buildOnDemandThinkingCues(fields = {}, rawText = '') {
   const text = clean(`${fields.diagnosis || ''} ${fields.medicalHistory || ''} ${fields.physicalOther || ''} ${fields.labInterpretation || ''} ${fields.currentMedicationPlan || ''} ${fields.safety || ''} ${fields.pain || ''} ${rawText || ''}`).toLowerCase();
   const cues = [];
   const add = (title, body, matcher = null) => {
-    if (matcher && !matcher.test(text)) return;
-    if (!cues.some((item) => item.title === title)) cues.push({ title, body });
+    let found = '';
+    if (matcher) {
+      const hits = [...new Set(text.match(new RegExp(matcher.source, 'g')) || [])].slice(0, 4);
+      if (!hits.length) return;
+      found = ` In this case log, look at: ${hits.join(', ')}.`;
+    }
+    if (!cues.some((item) => item.title === title)) cues.push({ title, body: `${body}${found}` });
   };
 
   add(
@@ -3931,13 +3936,13 @@ export default function App() {
       state: rawText.trim() ? 'complete' : (metadataReady ? 'active' : 'pending'),
     },
     {
-      label: 'Auto Fill',
+      label: 'Scan Note',
       detail: sequenceStep >= 3 ? 'Concept map fields populated' : 'Fill the map from the case',
       state: sequenceStep >= 3 ? 'complete' : (rawText.trim() ? 'active' : 'pending'),
     },
     {
       label: 'Export',
-      detail: sequenceStep >= 3 ? 'Download the formatted PDF' : 'Ready after auto fill',
+      detail: sequenceStep >= 3 ? 'Download the formatted PDF' : 'Ready after scanning',
       state: sequenceStep >= 3 ? 'active final' : 'pending',
     },
   ], [metadataReady, rawText, sequenceStep]);
@@ -3980,12 +3985,11 @@ export default function App() {
   };
   const generateThinkingCue = () => {
     const usedCount = generatedThinkingCues.length;
-    if (usedCount >= 3) {
-      setStatus('Thinking cues are limited to 3 per case.');
+    if (usedCount >= onDemandThinkingCues.length) {
+      setStatus('No more hints for this case. Review the ones you already generated.');
       return;
     }
     const visibleTitles = new Set([
-      ...nursingConceptConsiderations.map((item) => item.title),
       ...generatedThinkingCues.map((item) => item.title),
     ]);
     const nextCue = onDemandThinkingCues.find((item) => !visibleTitles.has(item.title))
@@ -4027,7 +4031,7 @@ export default function App() {
     if (metadataReady && sequenceStep === 1 && !hasAutoAdvancedStep1Ref.current) {
       hasAutoAdvancedStep1Ref.current = true;
       setSequenceStep(2);
-      setStatus('Step 2 unlocked: case intake is ready. Upload a PDF or paste case text to continue.');
+      setStatus('Step 2 unlocked: case intake is ready. Upload a PDF to continue.');
     }
   }, [metadataReady, sequenceStep]);
 
@@ -4105,11 +4109,11 @@ export default function App() {
       setRawText(clean(text));
       setIsFinalized(false);
       setProgress(100, 'PDF text ready.');
-      setStatus('PDF text extracted. Click Auto Fill From Case PDF to fill the concept map.');
+      setStatus('PDF text extracted. Click Scan Note to build the concept map.');
     } catch (err) {
       console.error(err);
       setProgress(0, '');
-      setStatus('PDF extraction failed. Paste the case text manually below.');
+      setStatus('PDF extraction failed. Try uploading the PDF again.');
     } finally {
       setLoading(false);
     }
@@ -4136,7 +4140,7 @@ export default function App() {
       return;
     }
     if (!rawText.trim()) {
-      setStatus('Upload a PDF or paste case text before AI parsing.');
+      setStatus('Upload a PDF before scanning.');
       return;
     }
 
@@ -4540,7 +4544,7 @@ export default function App() {
     }
     setSequenceStep((prev) => Math.max(prev, 2));
     hasAutoAdvancedStep1Ref.current = true;
-    setStatus('Step 2: Upload a case PDF or paste case text, then parse to fill worksheet fields.');
+    setStatus('Step 2: Upload a case PDF, then scan the note.');
   };
 
   const fillSpacingTestData = () => {
@@ -4672,7 +4676,7 @@ export default function App() {
 
   const developPriorityNursingBeta = () => {
     if (sequenceStep < 3) {
-      setStatus('Auto fill a case first, then review nursing priority ideas.');
+      setStatus('Scan a note first, then review nursing priority ideas.');
       return;
     }
     const priorityFields = buildPriorityNursingFields(fields, rawText);
@@ -4916,17 +4920,50 @@ export default function App() {
     );
   };
 
+  const getGroupHasIssue = (group) => group.fields.some(([key]) => {
+    const reason = getReviewReasonForValue(fields[key]);
+    const limit = CONCEPT_MAP_FIELD_LIMITS[key];
+    return Boolean(reason) || Boolean(limit && clean(String(fields[key] || '')).length > limit);
+  });
+
+  const renderGroupStatus = (hasIssue) => (
+    hasIssue
+      ? <span className="group-status issue" title="Missing or needs review" aria-label="Missing or needs review"><XCircle size={18} /></span>
+      : <span className="group-status ok" title="Complete" aria-label="Complete"><CheckCircle2 size={18} /></span>
+  );
+
+  const renderFieldGroup = (group) => {
+    const hasIssue = getGroupHasIssue(group);
+    return (
+      <details className={`field-group ${hasIssue ? 'has-issue' : 'is-complete'}`} key={group.title}>
+        <summary>
+          <h3>{group.title}</h3>
+          <span className="group-summary-end">
+            {renderGroupStatus(hasIssue)}
+            <Plus size={18} />
+          </span>
+        </summary>
+        <div className="field-group-grid">
+          {group.fields.map(renderConceptMapField)}
+        </div>
+      </details>
+    );
+  };
+
   const typhonGuide = (
     <details className="guide-panel guide-hero" open>
       <summary>
-        <span><FileText size={17} /> Start Here: Typhon Case Log Guide</span>
+        <span><FileText size={17} /> Start Here: Start with your Typhon case log, and then go into the explanation.</span>
         <ChevronDown size={18} />
       </summary>
       <div className="guide-body">
-        <div className="guide-copy">
-          <strong>Use the exported Typhon case log as your source.</strong>
-          <p>The builder fills the concept-map draft from that log, then you review the marked fields and export the finished PDF. Missing or uncertain details stay visible for you to complete.</p>
-        </div>
+        <ul className="guide-steps">
+          <li>Use your exported Typhon case log as your source. The more detailed it is, the better your concept map will be.</li>
+          <li>The builder creates the concept map from the log.</li>
+          <li>Review the marked fields and fill in anything that is missing.</li>
+          <li>Export your finished PDF.</li>
+        </ul>
+        <p className="guide-note">We make it easier, but you still provide the details. Anything unclear or missing is flagged for you.</p>
         <div className="guide-screens" aria-label="Onboarding walkthrough">
           <div className="guide-screen">
             <div className="mini-window">
@@ -4938,19 +4975,17 @@ export default function App() {
               </div>
             </div>
             <strong>1. Add the log</strong>
-            <p>Upload the case PDF, or paste the case text if the PDF is hard to read.</p>
           </div>
           <div className="guide-screen">
             <div className="mini-window">
               <div className="mini-bar"><span></span><span></span><span></span></div>
               <div className="mini-actions">
                 <span className="mini-button dark">Upload</span>
-                <span className="mini-button blue">Auto Fill</span>
+                <span className="mini-button blue">Scan Note</span>
               </div>
               <div className="mini-progress"><i></i><i></i><i></i></div>
             </div>
-            <strong>2. Run Auto Fill</strong>
-            <p>The app places the best available values into the concept-map fields.</p>
+            <strong>2. Scan the note</strong>
           </div>
           <div className="guide-screen">
             <div className="mini-window">
@@ -4960,7 +4995,6 @@ export default function App() {
               <div className="mini-field"><b>Medication</b><em className="mini-flag plum">Review</em></div>
             </div>
             <strong>3. Review flags</strong>
-            <p>Marked values need your eyes before the final export.</p>
           </div>
           <div className="guide-screen">
             <div className="mini-window">
@@ -4971,15 +5005,9 @@ export default function App() {
               </div>
             </div>
             <strong>4. Export the map</strong>
-            <p>Download the formatted concept map PDF after the fields look right.</p>
           </div>
         </div>
-        <div className="guide-flags">
-          <span className="guide-flag missing">Missing: no clear source value was found.</span>
-          <span className="guide-flag verify">Verify: check this against the chart or case log.</span>
-          <span className="guide-flag generated">Review: check suggested or uncertain text.</span>
-          <span className="guide-flag limit">PDF limit: shorten text so it fits the box.</span>
-        </div>
+        <p className="guide-note">Key things to think about: text must fit the PDF box, so keep entries short.</p>
       </div>
     </details>
   );
@@ -4990,7 +5018,6 @@ export default function App() {
         <div className="topbar">
           <div className="title">
             <h1>Concept Map Builder</h1>
-            <p>This concept builder helps create well-formatted concept maps with a smoother workflow. Output depends on the case log you provide: a clearer case log gives better results, and manual entry is available anywhere you need to review, correct, or complete details.</p>
           </div>
           <div className="view-toggle" aria-label="View mode">
             <button
@@ -5017,24 +5044,8 @@ export default function App() {
 
         <div className="workflow">
           <section className="card setup-card">
-            <div className="card-header"><h2 className="card-title">Progress</h2></div>
+            <div className="card-header"><h2 className="card-title">Set Up</h2></div>
             <div className="card-content">
-              <div className="flow-panel">
-                <div className="signal-list">
-                  {workflowSignals.map((item) => (
-                    <div className={`signal-item ${item.state}`} key={item.label}>
-                      <span className="signal-dot">
-                        {item.state === 'complete' ? <CheckCircle2 size={18} /> : <CircleDashed size={18} />}
-                      </span>
-                      <span>
-                        <strong>{item.label}</strong>
-                        <small>{item.detail}</small>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="live-status">{status}</div>
-              </div>
               <div>
                 <div className="split-2">
                   <div className="field-inline">
@@ -5084,21 +5095,15 @@ export default function App() {
                   <span className="dropzone-icon"><Upload size={20} /></span>
                   <div>
                     <strong>Typhon Case Log</strong>
-                    <p>The quality of the output depends on the quality of the input. This tool uses the case log to place available information, flag missing details, and leave review work visible instead of pretending unknown data is confirmed.</p>
+                    <p>Drag and drop your PDF here, or use Upload PDF to browse.</p>
                   </div>
                 </div>
                 <div className="dropzone-actions">
                   <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={loading || aiLoading}><Upload size={16} />Upload PDF</button>
-                  <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Auto Fill</button>
+                  <button className="btn primary-soft" onClick={() => applyParsedText(rawText)} disabled={!rawText.trim() || loading || aiLoading}><Wand2 size={16} />Scan Note</button>
                 </div>
-                <details className="source-panel compact-source">
-                  <summary>
-                    <span>{rawText.trim() ? 'Typhon source captured' : 'Paste Typhon text manually'}</span>
-                    <ChevronDown size={18} />
-                  </summary>
-                  <textarea className="large-text" value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="PDF text appears here. You can paste case-log text if upload is not available." />
-                </details>
               </div>
+              <div className="live-status">{status}</div>
               {(loading || aiLoading || parseProgress > 0) && (
                 <div className="progress-panel">
                   <strong>{parseProgressLabel || 'Progress'}</strong>
@@ -5123,21 +5128,14 @@ export default function App() {
             <section className="card review-card">
               <div className="card-header"><h2 className="card-title">Concept Map Fields</h2></div>
               <div className="card-content">
-                {MAIN_CONCEPT_MAP_FIELD_GROUPS.map((group) => (
-                  <details className="field-group" key={group.title}>
-                    <summary>
-                      <h3>{group.title}</h3>
-                      <Plus size={18} />
-                    </summary>
-                    <div className="field-group-grid">
-                      {group.fields.map(renderConceptMapField)}
-                    </div>
-                  </details>
-                ))}
-                <details className="field-group">
+                {MAIN_CONCEPT_MAP_FIELD_GROUPS.map(renderFieldGroup)}
+                <details className={`field-group ${medicationReviewItems.length ? 'has-issue' : 'is-complete'}`}>
                   <summary>
                     <span>Medications</span>
-                    <Plus size={18} />
+                    <span className="group-summary-end">
+                      {renderGroupStatus(!medications.length || medicationReviewItems.length > 0)}
+                      <Plus size={18} />
+                    </span>
                   </summary>
                   <div className="field">
                     <label className="field-label-row">
@@ -5166,39 +5164,27 @@ export default function App() {
               <div className="card-header"><h2 className="card-title">Nursing Diagnosis</h2></div>
               <div className="card-content">
                 <div className="status">
-                  Enter this section yourself after reviewing the concept-map fields. The prompts below are only thinking cues to help you decide what belongs in the nursing-priority boxes.
+                  <strong>This section is yours to write.</strong> You create the nursing diagnosis; the builder will not fill it in.
                 </div>
-                {PRIORITY_NURSING_FIELD_GROUPS.map((group) => (
-                  <details className="field-group" key={group.title}>
-                    <summary>
-                      <h3>{group.title}</h3>
-                      <Plus size={18} />
-                    </summary>
-                    <div className="field-group-grid">
-                      {group.fields.map(renderConceptMapField)}
-                    </div>
-                  </details>
-                ))}
                 <div className="concept-considerations">
-                  <h3>Concepts To Consider</h3>
-                  <div className="consideration-grid">
-                    {nursingConceptConsiderations.map((item) => (
-                      <div className="consideration-card" key={item.title}>
-                        <strong>{item.title}</strong>
-                        <p>{item.body}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <h3>What A Good Nursing Diagnosis Needs</h3>
+                  <ul className="guide-steps">
+                    <li>A specific problem or risk (for example, “Deficient fluid volume”), not a medical diagnosis.</li>
+                    <li>Evidence from this client’s assessment that supports it.</li>
+                    <li>A scientific rationale for why it is a priority.</li>
+                    <li>Interventions you can act on, and a measurable client response.</li>
+                  </ul>
+                  <p className="guide-note">Need help? Generate a hint of what to think about for this case.</p>
                   <div className="thinking-cue-panel">
                     <div className="thinking-cue-header">
                       <div>
-                        <strong>On-Demand Thinking Cues</strong>
-                        <span>{generatedThinkingCues.length}/3 used for this case</span>
+                        <strong>Need A Hint?</strong>
+                        <span>{generatedThinkingCues.length} of {onDemandThinkingCues.length} hints shown</span>
                       </div>
                       <button
                         className="btn primary-soft"
                         onClick={generateThinkingCue}
-                        disabled={sequenceStep < 3 || generatedThinkingCues.length >= 3}
+                        disabled={sequenceStep < 3 || generatedThinkingCues.length >= onDemandThinkingCues.length}
                       >
                         <Wand2 size={16} />Generate Cue
                       </button>
@@ -5230,10 +5216,11 @@ export default function App() {
                         </button>
                       </div>
                     ) : (
-                      <p className="cue-empty">Generate up to three extra prompts after auto fill. These stay in the builder and do not print on the PDF.</p>
+                      <p className="cue-empty">Generate hints tied to findings in your case after scanning your note. They do not print on the PDF.</p>
                     )}
                   </div>
                 </div>
+                {PRIORITY_NURSING_FIELD_GROUPS.map(renderFieldGroup)}
               </div>
             </section>
 
