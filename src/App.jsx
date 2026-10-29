@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, XCircle, CircleDashed, Columns2, Rows3, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, Download, Wand2, ChevronDown, CheckCircle2, XCircle, CheckSquare, Square, CircleDashed, Columns2, Rows3, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { jsPDF } from 'jspdf';
@@ -4819,7 +4819,7 @@ export default function App() {
   };
 
   const renderConceptMapField = ([key, label]) => {
-    const reviewReason = getReviewReasonForValue(fields[key]);
+    const reviewReason = sequenceStep >= 3 && !isPriorityNursingKey(key) ? getReviewReasonForValue(fields[key]) : '';
     const exportLimit = CONCEPT_MAP_FIELD_LIMITS[key];
     const fieldLength = clean(String(fields[key] || '')).length;
     const priorityPrompt = PRIORITY_FIELD_PROMPTS[key] || '';
@@ -4933,13 +4933,19 @@ export default function App() {
   );
 
   const renderFieldGroup = (group) => {
-    const hasIssue = getGroupHasIssue(group);
+    const isPriority = isPriorityNursingGroup(group);
+    const scanned = sequenceStep >= 3;
+    const hasIssue = scanned && !isPriority && getGroupHasIssue(group);
+    const done = isPriority && group.fields.every(([key]) => clean(String(fields[key] || '')));
+    const stateClass = isPriority ? '' : (scanned ? (hasIssue ? 'has-issue' : 'is-complete') : '');
     return (
-      <details className={`field-group ${hasIssue ? 'has-issue' : 'is-complete'}`} key={group.title}>
+      <details className={`field-group ${stateClass}`} key={group.title}>
         <summary>
           <h3>{group.title}</h3>
           <span className="group-summary-end">
-            {renderGroupStatus(hasIssue)}
+            {isPriority
+              ? <span className={`group-status ${done ? 'ok' : 'empty'}`} title={done ? 'Filled in' : 'Not filled in'} aria-label={done ? 'Filled in' : 'Not filled in'}>{done ? <CheckSquare size={18} /> : <Square size={18} />}</span>
+              : scanned && renderGroupStatus(hasIssue)}
             <Plus size={18} />
           </span>
         </summary>
@@ -5129,18 +5135,18 @@ export default function App() {
               <div className="card-header"><h2 className="card-title">Concept Map Fields</h2></div>
               <div className="card-content">
                 {MAIN_CONCEPT_MAP_FIELD_GROUPS.map(renderFieldGroup)}
-                <details className={`field-group ${medicationReviewItems.length ? 'has-issue' : 'is-complete'}`}>
+                <details className={`field-group ${sequenceStep >= 3 ? (!medications.length || medicationReviewItems.length ? 'has-issue' : 'is-complete') : ''}`}>
                   <summary>
                     <span>Medications</span>
                     <span className="group-summary-end">
-                      {renderGroupStatus(!medications.length || medicationReviewItems.length > 0)}
+                      {sequenceStep >= 3 && renderGroupStatus(!medications.length || medicationReviewItems.length > 0)}
                       <Plus size={18} />
                     </span>
                   </summary>
                   <div className="field">
                     <label className="field-label-row">
                       <span>Medication Review</span>
-                    {!!medicationReviewItems.length && <span className="badge review">Review</span>}
+                    {sequenceStep >= 3 && !!medicationReviewItems.length && <span className="badge review">Review</span>}
                     </label>
                     <div className="med-grid">
                       {medications.length ? medications.map((med, idx) => (
