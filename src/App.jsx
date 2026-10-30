@@ -3947,15 +3947,7 @@ export default function App() {
       state: sequenceStep >= 3 ? 'active final' : 'pending',
     },
   ], [metadataReady, rawText, sequenceStep]);
-  const priorityNursingRequiredFields = useMemo(
-    () => PRIORITY_NURSING_FIELD_GROUPS.flatMap((group) => group.fields.map(([key, label]) => ({ key, label }))),
-    []
-  );
-  const missingPriorityNursingFields = useMemo(
-    () => priorityNursingRequiredFields.filter(({ key }) => !clean(String(fields[key] || ''))),
-    [fields, priorityNursingRequiredFields]
-  );
-  const priorityNursingSectionComplete = missingPriorityNursingFields.length === 0;
+  const nursingDiagnosisCompleted = Boolean(clean(String(fields.nursingDiagnosis || '')));
 
   const docPreview = useMemo(() => buildDocText(fields, medications), [fields, medications]);
   const activeThinkingCue = generatedThinkingCues[activeThinkingCueIndex] || null;
@@ -4031,10 +4023,10 @@ export default function App() {
   }, [sequenceStep]);
 
   useEffect(() => {
-    if (!priorityNursingSectionComplete && priorityNursingReadyForPdf) {
+    if (!nursingDiagnosisCompleted && priorityNursingReadyForPdf) {
       setPriorityNursingReadyForPdf(false);
     }
-  }, [priorityNursingSectionComplete, priorityNursingReadyForPdf]);
+  }, [nursingDiagnosisCompleted, priorityNursingReadyForPdf]);
 
   useEffect(() => {
     const normalizedFaculty = normalizeFacultyName(fields.facultyMeta);
@@ -4419,8 +4411,8 @@ export default function App() {
       setStatus('Check the review confirmation before exporting.');
       return;
     }
-    if (!priorityNursingSectionComplete) {
-      setStatus('Complete every Priority Nursing Diagnosis field before exporting to PDF.');
+    if (!nursingDiagnosisCompleted) {
+      setStatus('Complete Nursing Diagnosis before exporting to PDF.');
       return;
     }
     if (!priorityNursingReadyForPdf) {
@@ -5272,18 +5264,12 @@ export default function App() {
                   <span>All done: I reviewed the fields and completed anything my instructor expects.</span>
                 </label>
                 <label className="checkbox-row review-check">
-                  <input
-                    type="checkbox"
-                    checked={priorityNursingReadyForPdf}
-                    onChange={(e) => setPriorityNursingReadyForPdf(e.target.checked)}
-                    disabled={!priorityNursingSectionComplete || sequenceStep < 3}
-                  />
-                  <span>Fulfill add to PDF: Priority Nursing Diagnosis section is complete and should be appended.</span>
+                  <input type="checkbox" checked={priorityNursingReadyForPdf} onChange={(e) => setPriorityNursingReadyForPdf(e.target.checked)} disabled={sequenceStep < 3 || !nursingDiagnosisCompleted} />
+                  <span>Fulfill add to PDF: Nursing Diagnosis is complete and should be appended.</span>
                 </label>
-                {!priorityNursingSectionComplete && sequenceStep >= 3 && (
+                {!nursingDiagnosisCompleted && sequenceStep >= 3 && (
                   <div className="status" style={{ marginTop: 8 }}>
-                    Complete these nursing diagnosis fields to unlock PDF export: {missingPriorityNursingFields.slice(0, 6).map((item) => item.label).join(', ')}
-                    {missingPriorityNursingFields.length > 6 ? `, +${missingPriorityNursingFields.length - 6} more.` : '.'}
+                    Add Nursing Diagnosis to unlock PDF export.
                   </div>
                 )}
                 <div className="export-choice">
@@ -5294,7 +5280,7 @@ export default function App() {
                   <button
                     className="btn primary"
                     onClick={downloadConceptMapPdfOutput}
-                    disabled={!reviewComplete || !priorityNursingReadyForPdf || sequenceStep < 3 || loading || !templateReady || !priorityNursingSectionComplete}
+                    disabled={!reviewComplete || !priorityNursingReadyForPdf || sequenceStep < 3 || loading || !templateReady || !nursingDiagnosisCompleted}
                   >
                     <Download size={16} />Download PDF
                   </button>

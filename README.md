@@ -11,7 +11,7 @@ The output depends on the quality of the case log. Clearer case logs produce bet
 - Auto-fill concept-map fields.
 - Flag generated or uncertain values in the review form.
 - Let users manually edit every field, including nursing diagnosis content.
-- Require completion of Priority Nursing Diagnosis sections before concept-map PDF export.
+- Require Nursing Diagnosis completion before concept-map PDF export.
 - Export a formatted concept-map PDF.
 - Export with nursing priority sections appended in the PDF.
 
@@ -56,4 +56,4 @@ The included GitHub Actions workflow builds and deploys the app to GitHub Pages 
 
 ## Current Status
 
-This is a working web app ready for testing and pilot use. Nursing diagnosis and priority sections are user-authored in the form and are now a required part of the concept-map PDF export workflow.
+This is a working web app ready for testing and pilot use. Nursing diagnosis content is user-authored in the form and required for concept-map PDF export.
