@@ -3876,6 +3876,7 @@ export default function App() {
   const [outputLastRun, setOutputLastRun] = useState('');
   const [outputError, setOutputError] = useState('');
   const [reviewComplete, setReviewComplete] = useState(false);
+  const [priorityNursingReadyForPdf, setPriorityNursingReadyForPdf] = useState(false);
   const [templateReady, setTemplateReady] = useState(false);
   const [templateFingerprint, setTemplateFingerprint] = useState('');
   const [templateSizeBytes, setTemplateSizeBytes] = useState(0);
@@ -3942,10 +3943,19 @@ export default function App() {
     },
     {
       label: 'Export',
-      detail: sequenceStep >= 3 ? 'Download the formatted PDF' : 'Ready after scanning',
+      detail: sequenceStep >= 3 ? 'Complete nursing diagnosis, then download PDF' : 'Ready after scanning',
       state: sequenceStep >= 3 ? 'active final' : 'pending',
     },
   ], [metadataReady, rawText, sequenceStep]);
+  const priorityNursingRequiredFields = useMemo(
+    () => PRIORITY_NURSING_FIELD_GROUPS.flatMap((group) => group.fields.map(([key, label]) => ({ key, label }))),
+    []
+  );
+  const missingPriorityNursingFields = useMemo(
+    () => priorityNursingRequiredFields.filter(({ key }) => !clean(String(fields[key] || ''))),
+    [fields, priorityNursingRequiredFields]
+  );
+  const priorityNursingSectionComplete = missingPriorityNursingFields.length === 0;
 
   const docPreview = useMemo(() => buildDocText(fields, medications), [fields, medications]);
   const activeThinkingCue = generatedThinkingCues[activeThinkingCueIndex] || null;
@@ -4021,6 +4031,12 @@ export default function App() {
   }, [sequenceStep]);
 
   useEffect(() => {
+    if (!priorityNursingSectionComplete && priorityNursingReadyForPdf) {
+      setPriorityNursingReadyForPdf(false);
+    }
+  }, [priorityNursingSectionComplete, priorityNursingReadyForPdf]);
+
+  useEffect(() => {
     const normalizedFaculty = normalizeFacultyName(fields.facultyMeta);
     if (fields.facultyMeta && normalizedFaculty !== fields.facultyMeta) {
       updateField('facultyMeta', normalizedFaculty);
@@ -4082,6 +4098,7 @@ export default function App() {
     setSequenceStep((prev) => Math.max(prev, 3));
     setIsFinalized(false);
     setReviewComplete(false);
+    setPriorityNursingReadyForPdf(false);
     resetThinkingCuesForCase();
     setStatus(
       parsed.medications.length > MED_TEMPLATE_ROW_CAP
@@ -4103,6 +4120,7 @@ export default function App() {
     setOutputLastRun('');
     setOutputError('');
     setReviewComplete(false);
+    setPriorityNursingReadyForPdf(false);
     resetThinkingCuesForCase();
     try {
       const text = await extractPdfText(file, (value, label) => setProgress(value, label));
@@ -4173,6 +4191,7 @@ export default function App() {
       setSequenceStep((prev) => Math.max(prev, 3));
       setIsFinalized(false);
       setReviewComplete(false);
+      setPriorityNursingReadyForPdf(false);
       resetThinkingCuesForCase();
       setApiKeyVerified(true);
       setProgress(100, 'AI parsing complete.');
@@ -4387,7 +4406,7 @@ export default function App() {
     }
   };
 
-  const downloadConceptMapPdfOutput = async ({ includePriorityNursingSections = false } = {}) => {
+  const downloadConceptMapPdfOutput = async () => {
     if (sequenceStep < 3) {
       setStatus('Parse a case first, then export the formatted concept map source.');
       return;
@@ -4396,16 +4415,26 @@ export default function App() {
       setStatus('Concept map template is not ready. Check public/templates/concept-map-template.docx.');
       return;
     }
+    if (!reviewComplete) {
+      setStatus('Check the review confirmation before exporting.');
+      return;
+    }
+    if (!priorityNursingSectionComplete) {
+      setStatus('Complete every Priority Nursing Diagnosis field before exporting to PDF.');
+      return;
+    }
+    if (!priorityNursingReadyForPdf) {
+      setStatus('Check "Fulfill add to PDF" to confirm nursing diagnoses should be appended.');
+      return;
+    }
 
     setLoading(true);
     setOutputError('');
     setOutputProgress(20);
-    setOutputStatus(includePriorityNursingSections
-      ? 'Building formatted concept map PDF with nursing priorities...'
-      : 'Building formatted concept map PDF with blank nursing-priority sections...');
+    setOutputStatus('Building formatted concept map PDF with nursing priorities...');
     try {
       await exportConceptMapPdf(fields, medications, rawText, {
-        blankPriorityNursingSections: !includePriorityNursingSections,
+        blankPriorityNursingSections: false,
       });
       setIsFinalized(true);
       setSequenceStep((prev) => Math.max(prev, 4));
@@ -4414,9 +4443,7 @@ export default function App() {
       const stamp = new Date().toLocaleString();
       setOutputLastRun(stamp);
       setOutputStatus(`Concept map PDF downloaded successfully at ${stamp}.`);
-      setStatus(includePriorityNursingSections
-        ? 'Concept map PDF downloaded with nursing priorities included.'
-        : 'Concept map PDF downloaded with nursing-priority sections blank.');
+      setStatus('Concept map PDF downloaded with nursing priorities included.');
     } catch (err) {
       console.error(err);
       setOutputProgress(0);
@@ -5244,12 +5271,31 @@ export default function App() {
                   <input type="checkbox" checked={reviewComplete} onChange={(e) => setReviewComplete(e.target.checked)} />
                   <span>All done: I reviewed the fields and completed anything my instructor expects.</span>
                 </label>
+                <label className="checkbox-row review-check">
+                  <input
+                    type="checkbox"
+                    checked={priorityNursingReadyForPdf}
+                    onChange={(e) => setPriorityNursingReadyForPdf(e.target.checked)}
+                    disabled={!priorityNursingSectionComplete || sequenceStep < 3}
+                  />
+                  <span>Fulfill add to PDF: Priority Nursing Diagnosis section is complete and should be appended.</span>
+                </label>
+                {!priorityNursingSectionComplete && sequenceStep >= 3 && (
+                  <div className="status" style={{ marginTop: 8 }}>
+                    Complete these nursing diagnosis fields to unlock PDF export: {missingPriorityNursingFields.slice(0, 6).map((item) => item.label).join(', ')}
+                    {missingPriorityNursingFields.length > 6 ? `, +${missingPriorityNursingFields.length - 6} more.` : '.'}
+                  </div>
+                )}
                 <div className="export-choice">
                   <div>
                     <strong>Download concept map</strong>
-                    <span>Downloads the concept map with the nursing-priority boxes blank.</span>
+                    <span>Downloads the concept map with Priority Nursing Diagnosis sections appended.</span>
                   </div>
-                  <button className="btn primary" onClick={() => downloadConceptMapPdfOutput({ includePriorityNursingSections: false })} disabled={!reviewComplete || sequenceStep < 3 || loading || !templateReady}>
+                  <button
+                    className="btn primary"
+                    onClick={downloadConceptMapPdfOutput}
+                    disabled={!reviewComplete || !priorityNursingReadyForPdf || sequenceStep < 3 || loading || !templateReady || !priorityNursingSectionComplete}
+                  >
                     <Download size={16} />Download PDF
                   </button>
                 </div>

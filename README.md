@@ -10,10 +10,10 @@ The output depends on the quality of the case log. Clearer case logs produce bet
 - Parse key clinical details in the browser.
 - Auto-fill concept-map fields.
 - Flag generated or uncertain values in the review form.
-- Let users manually edit every field.
-- Optionally develop nursing priorities in a separate beta section.
+- Let users manually edit every field, including nursing diagnosis content.
+- Require completion of Priority Nursing Diagnosis sections before concept-map PDF export.
 - Export a formatted concept-map PDF.
-- Export with nursing priority sections blank or completed.
+- Export with nursing priority sections appended in the PDF.
 
 ## Privacy Note
 
@@ -56,4 +56,4 @@ The included GitHub Actions workflow builds and deploys the app to GitHub Pages 
 
 ## Current Status
 
-This is a working web app ready for testing and pilot use. The nursing priority generator is intentionally separated as a beta workflow so users can decide whether to include those sections or leave them blank for manual completion.
+This is a working web app ready for testing and pilot use. Nursing diagnosis and priority sections are user-authored in the form and are now a required part of the concept-map PDF export workflow.
