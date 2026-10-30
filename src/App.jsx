@@ -253,6 +253,56 @@ function extractSexFromText(text = '') {
   return '';
 }
 
+const CLIENT_NAME_STOP_WORDS = new Set([
+  'age', 'sex', 'gender', 'dob', 'date', 'diagnosis', 'mrn', 'room', 'chief', 'complaint', 'allergy', 'allergies',
+  'and', 'is', 'was', 'a', 'an', 'the', 'this', 'that', 'patient', 'client', 'pt', 'name', 'unknown', 'n/a', 'na',
+  'none', 'not', 'information', 'student', 'clinical', 'notes', 'presented', 'presents', 'reports', 'who', 'with',
+]);
+
+function cleanClientNameCandidate(value = '') {
+  const tokens = clean(value).split(/\s+/).filter(Boolean);
+  const kept = [];
+  for (const token of tokens) {
+    if (CLIENT_NAME_STOP_WORDS.has(token.toLowerCase().replace(/[.,;:]+$/, ''))) break;
+    kept.push(token.replace(/[,;:]+$/, ''));
+    if (kept.length >= 3) break;
+  }
+  const name = kept.join(' ').trim();
+  return /[A-Za-z]/.test(name) && name.length <= 40 ? name : '';
+}
+
+function extractClientName(text = '') {
+  const source = clean(text);
+  if (!source) return '';
+
+  const nameToken = "[A-Za-z][A-Za-z'’.-]*";
+  const labeled = source.match(new RegExp(`\\b(?:Patient|Client|Pt)\\s*(?:Full\\s+)?Name\\s*[:=-]\\s*(${nameToken}(?:\\s+${nameToken}){0,3})`, 'i'))?.[1];
+  const labeledName = cleanClientNameCandidate(labeled || '');
+  if (labeledName) return labeledName;
+
+  const initials = source.match(/\b(?:Patient|Client|Pt)\s*(?:Initials?|Initial)\s*[:=-]\s*([A-Z](?:\.?\s?[A-Z]){1,3}\.?)(?=\s|,|;|$)/)?.[1];
+  if (initials) return clean(initials);
+
+  const labeledPatient = source.match(new RegExp(`\\b(?:Patient|Client)\\s*[:=-]\\s*(${nameToken}(?:\\s+${nameToken}){0,2})`))?.[1];
+  const labeledPatientName = cleanClientNameCandidate(labeledPatient || '');
+  if (labeledPatientName && /^[A-Z]/.test(labeledPatientName)) return labeledPatientName;
+
+  const named = source.match(/\bnamed\s+([A-Z][a-z'’-]+(?:\s+[A-Z][a-z'’-]+)?)/)?.[1];
+  if (named) return clean(named);
+
+  const introduced = source.match(/\b([A-Z][a-z'’-]+\s+[A-Z][a-z'’-]+)\s+is\s+(?:an?\s+)?\d{1,3}\s*[- ]?\s*(?:year|yr|y\/o)/)?.[1];
+  const introducedName = cleanClientNameCandidate(introduced || '');
+  if (introducedName) return introducedName;
+
+  const initialsIntro = source.match(/\b([A-Z]\.\s?[A-Z]\.?)(?:,|\s)\s*(?:an?\s+)?\d{1,3}\s*[- ]?\s*(?:year|yr|y\/o)/)?.[1];
+  if (initialsIntro) return clean(initialsIntro);
+
+  const honorific = source.match(/\b(Mr|Mrs|Ms|Miss|Mx)\.?\s+([A-Z][a-z'’-]+)\b/);
+  if (honorific) return `${honorific[1]}. ${honorific[2]}`;
+
+  return '';
+}
+
 function extractHeightFromText(text = '') {
   const source = clean(text);
   return source.match(/\bheight\s*[:=-]?\s*([0-9]\s*['’]\s*\d{1,2}\s*(?:\"|in|inches)?)/i)?.[1]?.replace(/\s+/g, '') || '';
@@ -827,6 +877,7 @@ function parseCaseText(rawText) {
     date,
     week: '',
     patientInitialAge: age,
+    clientName: extractClientName(`${clinicalNotes}\n${text}`),
     age,
     sex,
     ht,
@@ -1575,7 +1626,7 @@ function ensureConceptMapFields(inputFields, rawText = '', inputMeds = []) {
   const likelyVitals = buildLikelyVitals(fields, text);
 
   setIfBlank('age', fields.patientInitialAge);
-  setIfBlank('clientName', 'J.D.');
+  setIfBlank('clientName', extractClientName(text));
   setIfBlank('diagnosis', extractSimpleDiagnosis(fields.diagnosis, text));
   setIfBlank('ht', extractHeightFromText(text));
   setIfBlank('wt', extractWeightFromText(text));
@@ -3702,6 +3753,7 @@ function sanitizeParsedFields(fields = {}, sourceText = '') {
   return {
     ...fields,
     date: localDate || clean(fields.date),
+    clientName: clean(fields.clientName) || extractClientName(sourceText),
     age: localAge || clean(fields.age),
     patientInitialAge: localAge || clean(fields.patientInitialAge),
     sex: localSex || clean(fields.sex),
